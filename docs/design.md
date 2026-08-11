@@ -276,7 +276,41 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 
 **还没定：**
 
-1. **`.pi/agents/*.md` 的 `tools` 字段具体怎么分配**（scout 只读到什么粒度、planner 要不要给 bash）需要对着 pi 实际 tool 清单核一遍——留到 P2 落地时处理。
-2. **每个 agent 角色具体接哪家 provider/model**——按你的决定，不预先定，等实际用的时候再接入，不是阻塞项，只是提醒 P2 会遇到。
+1. **每个 agent 角色具体接哪家 provider/model**——按你的决定，不预先定，等实际用的时候再接入，不是阻塞项。
 
-对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档，最后再进入 P1 落地。
+---
+
+## 7. 落地后基于真实机制的适配
+
+读了 `.pi/extensions/subagent/index.ts` 源码之后（不是文档摘要，是实际代码），发现 `subagent` 工具的真实机制比最初设计假设的更具体，也更有用，值得基于此调整设计，而不是死守最初的静态方案：
+
+### 7.1 dispatch 的真实成本模型
+
+不是"角色扮演"，是**每次调用都会真的 spawn 一个独立 `pi` 子进程**——全新上下文、全新 token 消耗、全新耗时。这印证了 3.3/3.7 里"默认不拆"的判断是对的，而且给了更具体的理由：dispatch 贵在真金白银的进程开销和模型调用，不只是"哲学上更啰嗦"。`AGENTS.md` 里现在把这个具体讲清楚了，而不是停留在"避免黑箱"这种抽象表述。
+
+### 7.2 chain 的 `{previous}` 是纯文本替换，不是上下文共享
+
+之前设计文档没细说这点，容易让人以为 chain 里下一步能拿到上一步的完整上下文。实际是：`step.task.replace(/\{previous\}/g, previousOutput)`，就是字符串替换。已经在 `AGENTS.md` 里加了规则：chain 里传指针/指令，不要传大段粘贴内容，被 dispatch 的 agent 自己有 `read`/`grep`/`bash`，该重新查的自己查，比传大段文本更准（不会过时）也更省 token。
+
+同时确认了 chain **第一步失败就整体停**（源码里 `Chain stopped at step N`），没有部分继续，已经写进 `AGENTS.md`。
+
+### 7.3 每个 task 都能带 `cwd` —— Race 模式的关键，之前设计没用到这个能力
+
+这是最大的一处补强。`subagent` 工具的 single/parallel/chain 三种模式的每个 task 都接受一个 `cwd` 参数（独立工作目录），之前的设计完全没提这个字段，导致 Race 模式（比较多个实现方案）设计上是空的——3.7 节原来只写了"parallel dispatch 多个方案，主 session 比较后选择"，但没说清楚：如果要 dispatch 出去真的写代码比较两个实现，两个并行进程写同一个工作目录会互相打架。
+
+修复方式：
+
+- 新增第 4 个 agent profile——**`builder`**（`.pi/agents/builder.md`）：唯一一个有完整读写权限的可 dispatch 角色，但**只在 Race 模式下用**，日常单路径实现仍然是主 session 直接做，不走这个角色。
+- Race 的具体机制：每个变体先 `git worktree add` 出一个独立目录和 `race/<slug>-<variant>` 分支，parallel dispatch `builder` 到各自的 `cwd`，比较结果后合并赢家、`git worktree remove` 清理。
+- 这个设计和 3.6 节"多任务并行/多 worktree"的场景假设是同一个机制的自然延伸——不是新发明一套隔离方案，是把已经决定要用的 `git worktree` 用在了刀刃上。
+- `.pi/skills/git/SKILL.md` 的分支表加了一行 `race/*`（可 commit/merge，不 push，用完即删）。
+
+角色数量因此是 **8 → 4**（scout / planner / reviewer / builder），不是原来写的"8 → 3"——builder 是后来因为摸清真实机制才补上的，不是最初就想到的。
+
+### 7.4 Parallel 的硬上限
+
+`MAX_PARALLEL_TASKS = 8`，`MAX_CONCURRENCY = 4`——如果某个任务真的需要超过 8 个独立方向，需要分批调用，不能指望一次塞完。已写进 `AGENTS.md`。
+
+---
+
+对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。

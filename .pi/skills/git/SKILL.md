@@ -19,6 +19,7 @@ Check current branch before any commit, merge, or push:
 | `fix/*` | ✅ | ✅ | ✅ |
 | `docs/*` | ✅ | ✅ | ✅ |
 | `chore/*` | ✅ | ✅ | ✅ |
+| `race/*` | ✅ | ✅ | ❌ |
 
 1. Run `git branch --show-current`.
 2. On `main` → stop, switch to `dev` or create a feature branch.
@@ -26,7 +27,7 @@ Check current branch before any commit, merge, or push:
 4. On a feature branch → proceed normally.
 5. After work: suggest `git checkout dev && git merge --no-ff <branch>`.
 
-Branch naming: `feat/<short-description>`, `fix/<short-description>`, `docs/<short-description>`, `chore/<short-description>`.
+Branch naming: `feat/<short-description>`, `fix/<short-description>`, `docs/<short-description>`, `chore/<short-description>`. `race/<slug>-<variant>` is a special case created per-variant inside a dedicated `git worktree` for Race mode (see `AGENTS.md`'s "Race mode mechanics") — never pushed, deleted along with its worktree once the race is judged and the winner merged.
 
 This table is a default, not a hard gate — a solo repo with no `dev` branch at all doesn't need to invent one just to satisfy this table; adapt to what the repo actually does.
 

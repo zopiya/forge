@@ -20,19 +20,20 @@ Default to the lightest thing that works. When in doubt, undershoot rather than 
 |---|---|
 | Pure Q&A, no file/tool work | Answer directly |
 | Single clear responsibility | Just do it in this session |
-| Independent work streams (multi-direction exploration, comparing approaches) | Dispatch in parallel — see `.pi/agents/scout.md` |
+| Independent work streams (multi-direction exploration) | Dispatch scout in parallel |
+| Comparing two or more real implementations | Race — see below, this is the one case that needs write access outside this session |
 | Dependent handoff (A's output feeds B) | Dispatch as a chain, `{previous}` carries context forward |
-| Public API change, destructive edit, or broad refactor | Chain ending in `.pi/agents/reviewer.md` (plus tests) — not done until that stage passes |
+| Public API change, destructive edit, or broad refactor | Build here as usual, run tests here, then chain-dispatch `.pi/agents/reviewer.md` for an independent pass — not done until that passes |
 | Multi-phase task, one sitting, doesn't need to survive a restart | Keep a plain TODO in the conversation — don't create a `.pi/work/` directory for it |
 | Requirements are fuzzy, scope is large, or work needs to survive a session restart | Create `.pi/work/<slug>/` and go through spec → plan → tasks → build → validate (see `.pi/work/README.md` and `.pi/skills/spec-driven/SKILL.md`) |
 
-Default chains by intent — most of these run entirely in this session; only dispatch the specific stage that genuinely benefits from isolation, don't dispatch by default just because a chain is listed below:
+Default chains by intent — most of these run entirely in this session; only dispatch the specific stage that genuinely benefits from isolation, don't dispatch by default just because a chain is listed below. Tests run in this session immediately after building, every time — that's cheap and doesn't need dispatch; `reviewer` is the thing that's optional and only worth dispatching when the change is Guard-worthy:
 
 | Intent | Default chain |
 |---|---|
-| `feat` | explore → plan → build → test/review (parallel) |
+| `feat` | explore → plan → build → test, dispatch reviewer if the change is Guard-worthy |
 | `fix` | debug → build → test |
-| `refactor` | explore → plan → build → test |
+| `refactor` | explore → plan → build → test, dispatch reviewer if broad |
 | `docs` | build (skip explore, it's rarely needed) |
 | `perf` | debug → plan → build → test |
 | `chore` / `ci` | build → test |
@@ -40,7 +41,7 @@ Default chains by intent — most of these run entirely in this session; only di
 Manual triggers, honored verbatim when the user says them:
 
 - "loop until X" — iterate toward a concrete success condition, cap at 3 rounds.
-- "race A vs B" — two independent attempts in parallel, then pick.
+- "race A vs B" — real parallel implementations, each in its own git worktree, then pick. See "Race mode mechanics" below.
 - "guard X" — protect a change behind test/review before it counts as done.
 - "pm" / "full feature" — multi-phase with visible progress; doesn't need a `.pi/work/` file unless it also needs cross-session recovery.
 
@@ -48,17 +49,20 @@ If a dispatched agent comes back stuck or missing information, ask the user one 
 
 ## Agents available for dispatch
 
-Everything defaults to running in this session. Dispatch to one of these only when isolation or parallelism is worth the overhead — see each file for its exact scope:
+Everything defaults to running in this session. Dispatch to one of these only when isolation or parallelism is worth the overhead — see each file for its exact scope. Model choice per agent is deferred (see each file), but the intent is: cheap/fast for scout (high volume, low judgment per call), capable for planner/reviewer/builder (judgment quality matters, called less often):
 
-- `.pi/agents/scout.md` — read-only, fast model, parallel multi-directional codebase exploration.
+- `.pi/agents/scout.md` — read-only, parallel multi-directional codebase exploration.
 - `.pi/agents/planner.md` — read-only, produces a plan/spec when a task is complex enough to earn one.
 - `.pi/agents/reviewer.md` — read-only + bash (to actually run checks, not just read code), independent second opinion uncontaminated by having written the change.
+- `.pi/agents/builder.md` — full read/write/bash, dispatched **only** for Race mode, always with its own `cwd`. Never used for normal single-path implementation — that's this session, directly.
 
-There is no dedicated `build`/`debug`/`general` agent file — that's just this session, doing the work directly.
+There is no `debug`/`general` agent file — that's just this session, doing the work directly.
 
 ### How to actually dispatch
 
-Dispatching uses the `subagent` tool (vendored in `.pi/extensions/subagent/`, from pi's own reference implementation). Its default scope is `"user"` (`~/.pi/agent/agents/`), which does **not** see this project's agents — every call here must pass:
+Dispatching uses the `subagent` tool (vendored in `.pi/extensions/subagent/`, from pi's own reference implementation). It spawns a real, separate `pi` process per task — full isolation, but also real process-spinup + full model-call cost, so don't reach for it by default; the routing table above is deliberately biased toward doing things in this session.
+
+Its default scope is `"user"` (`~/.pi/agent/agents/`), which does **not** see this project's agents — every call here must pass:
 
 ```jsonc
 { "agentScope": "both", "confirmProjectAgents": false, ... }
@@ -66,11 +70,28 @@ Dispatching uses the `subagent` tool (vendored in `.pi/extensions/subagent/`, fr
 
 `"both"` picks up project-local agents (`.pi/agents/`) without losing anything defined at the user level. `confirmProjectAgents: false` skips the tool's own "run project-local agents?" prompt — consistent with the container-first, no-extra-confirmation stance in `APPEND_SYSTEM.md`; leave it at the default `true` if this is ever run somewhere that assumption doesn't hold.
 
+Mechanics worth knowing before relying on this:
+
+- **`{previous}` in chain mode is plain text substitution** — the next step does not inherit any context, tools, or memory from the previous one, only whatever text got substituted in. Pass a pointer/instruction ("review the changes made to the auth module, use git diff to see them yourself"), not a wall of pasted content — the target agent has its own `read`/`grep`/`bash` to re-derive ground truth, that's cheaper and can't go stale.
+- **Chain stops at the first failed step.** No partial continuation, no automatic retry — a failed step surfaces to you as the caller; decide whether to fix and re-dispatch or ask the user.
+- **Parallel is capped at 8 tasks total, 4 running concurrently.** If a task genuinely needs more independent angles than that, batch it into rounds rather than trying to force one call over the limit.
+- **Every task (single/parallel/chain step) accepts a `cwd`** — this is what makes Race mode safe (see below); for scout/planner/reviewer you normally leave it unset and let it default to the current directory, since they're read-only and can't collide with anything.
+
 Three shapes:
 
 - Single: `{ agent: "scout", task: "...", agentScope: "both", confirmProjectAgents: false }`
-- Parallel: `{ tasks: [{ agent: "scout", task: "..." }, ...], agentScope: "both", confirmProjectAgents: false }` (max 8, 4 concurrent)
+- Parallel: `{ tasks: [{ agent: "scout", task: "..." }, ...], agentScope: "both", confirmProjectAgents: false }`
 - Chain: `{ chain: [{ agent: "planner", task: "..." }, { agent: "reviewer", task: "review: {previous}" }], agentScope: "both", confirmProjectAgents: false }`
+
+### Race mode mechanics
+
+Race needs two or more *real* implementations to compare, which means real file writes — dispatching `builder` in parallel into the **same** working directory would have both processes racing on the same files. `cwd` per task is what avoids that:
+
+1. Create one git worktree per variant off the current branch: `git worktree add ../<repo>-race-<label> -b race/<slug>-<label>`.
+2. Parallel-dispatch `builder`, one task per variant, each with `cwd` pointing at its own worktree: `{ tasks: [{ agent: "builder", task: "<approach A>", cwd: "../<repo>-race-a" }, { agent: "builder", task: "<approach B>", cwd: "../<repo>-race-b" }], agentScope: "both", confirmProjectAgents: false }`.
+3. Compare results — diffs, what each builder verified, trade-offs reported. Dispatch `reviewer` against each worktree (`cwd` set the same way) if an independent judgment is worth it.
+4. Once a winner's picked: merge/cherry-pick its branch into the real one, then `git worktree remove` the others (including the winner's worktree once merged) — don't leave them lying around.
+5. If this Race was big enough to warrant a `.pi/work/<slug>/` directory, record the comparison and the decision in it before cleanup.
 
 ## Working style
 
@@ -100,4 +121,4 @@ See `.pi/work/README.md` for the file convention and naming rule, and the routin
 
 ## Design rationale
 
-The reasoning behind every decision here — why no MCP, why no default guardrail, why Synapse became plain files, why 8 roles became 3 — lives in `docs/design.md`. Read it before changing any of the above.
+The reasoning behind every decision here — why no MCP, why no default guardrail, why Synapse became plain files, why 8 roles became 4 — lives in `docs/design.md`. Read it before changing any of the above.
