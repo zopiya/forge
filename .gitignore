@@ -5,6 +5,9 @@ node_modules/
 .env.*
 dist/
 build/
+__pycache__/
+*.pyc
+.pytest_cache/
 
 # pi session exports (/export from the TUI) — personal, large, not repo content
 *.jsonl
