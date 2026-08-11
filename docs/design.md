@@ -313,4 +313,14 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 
 ---
 
+## 8. Dogfooding 回路：用真实 session log 驱动改进
+
+跑了第一个真实 pi 会话之后确认：与其建一套反馈流水线，不如复用已经在用的机制——`.pi/prompts/`。新增 `.pi/prompts/retro.md`：输入一份 `/export` 出来的 session JSONL，扫描里面的摩擦点（失败的工具调用、模型自己回退推翻的判断、重复犯的同一个错），对每一条追根到具体证据（原始 tool_use 参数、tool_result 文本），分成四类——Forge 真 bug / 文档缺口 / 一次性模型失误 / pi 本身的坑——只对前两类出修改清单，其余记录不改。这本身也是"只做有价值的事"的延伸：不新建工具或存储机制，用已有的 prompt template 约定把这件事变成可重复的操作，而不是一次性人工排查。
+
+第一次真实运行就产出了一个例子：3 个并行 scout 全部失败，报 `Unknown agent: "scout". Available agents: none.`。排查过程本身（见该次 session log）反转了两次结论——一度怀疑是 `ctx.cwd` 问题，最后查到原始调用参数才发现是模型把 `agentScope`/`confirmProjectAgents` 错误嵌进了每个 task 对象里，而不是放在顶层；`TaskItem` schema 只认 `agent`/`task`/`cwd`，多余字段被静默丢弃，`agentScope` 回落默认值 `"user"`，而项目 agents 只在 `.pi/agents/`（project scope）下，于是查不到任何 agent。**结论：不是 Forge 的代码或设计问题**——vendored 扩展与官方 example 逐字节一致，参数放对位置后立刻成功。属于"文档缺口"一类：`AGENTS.md` 之前只给了正确写法的例子，没有明确警告"这两个参数不能放进 task 里"，导致同一个错误足以让人踩一次坑。已在 `AGENTS.md` 的"How to actually dispatch"里加了显式的错误/正确对照，直接引用这次的证据链，防止同一坑被踩第二次。
+
+会话导出文件本身（大、含完整 thinking、纯个人排错记录）不进 git——`.gitignore` 加了 `*.jsonl`；`retro.md` 只要求一个本地路径，用完可以随手清理。
+
+---
+
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。

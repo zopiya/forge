@@ -70,6 +70,16 @@ Its default scope is `"user"` (`~/.pi/agent/agents/`), which does **not** see th
 
 `"both"` picks up project-local agents (`.pi/agents/`) without losing anything defined at the user level. `confirmProjectAgents: false` skips the tool's own "run project-local agents?" prompt — consistent with the container-first, no-extra-confirmation stance in `APPEND_SYSTEM.md`; leave it at the default `true` if this is ever run somewhere that assumption doesn't hold.
 
+**`agentScope` and `confirmProjectAgents` are top-level call params, never per-task fields.** `TaskItem` (the schema for entries inside `tasks`/`chain`) only accepts `agent`, `task`, `cwd` — nesting `agentScope`/`confirmProjectAgents` inside a task object is silently ignored (no schema error), the call falls back to the tool's own default `agentScope: "user"`, and since this project's agents only exist under `.pi/agents/` (project scope), the result is every dispatch failing with `Unknown agent: "<name>". Available agents: none.` This exact failure happened once during dogfooding — traced via the session log, confirmed by inspecting the raw call params (see `.pi/prompts/retro.md` for the method). Get the shape right the first time:
+
+```jsonc
+// Wrong — agentScope/confirmProjectAgents nested inside a task, silently dropped:
+{ "tasks": [{ "agent": "scout", "task": "...", "agentScope": "both", "confirmProjectAgents": false }] }
+
+// Right — top-level, sibling of "tasks"/"chain"/"agent":
+{ "tasks": [{ "agent": "scout", "task": "..." }], "agentScope": "both", "confirmProjectAgents": false }
+```
+
 Mechanics worth knowing before relying on this:
 
 - **`{previous}` in chain mode is plain text substitution** — the next step does not inherit any context, tools, or memory from the previous one, only whatever text got substituted in. Pass a pointer/instruction ("review the changes made to the auth module, use git diff to see them yourself"), not a wall of pasted content — the target agent has its own `read`/`grep`/`bash` to re-derive ground truth, that's cheaper and can't go stale.

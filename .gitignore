@@ -5,3 +5,6 @@ node_modules/
 .env.*
 dist/
 build/
+
+# pi session exports (/export from the TUI) — personal, large, not repo content
+*.jsonl
