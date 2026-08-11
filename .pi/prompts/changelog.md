@@ -9,7 +9,7 @@ Generate a CHANGELOG entry following the [Keep a Changelog](https://keepachangel
    - `feat` → **Added**
    - `fix` → **Fixed**
    - `refactor` / `perf` → **Changed**
-   - `docs` → **Changed**
+   - `docs` → **Changed** — except `docs(work)` / commits scoped to `.pi/work/<slug>/` artifacts (spec/plan/tasks/build-log/validation): those are process bookkeeping for a feature already covered by its own `feat`/`fix` entry, omit them too
    - `chore` / `ci` → omit (internal, not user-facing)
    - `BREAKING CHANGE` / `feat!` → **Breaking Changes** (highlight prominently)
 3. Format as:

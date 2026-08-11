@@ -84,6 +84,7 @@ Mechanics worth knowing before relying on this:
 
 - **`{previous}` in chain mode is plain text substitution** — the next step does not inherit any context, tools, or memory from the previous one, only whatever text got substituted in. Pass a pointer/instruction ("review the changes made to the auth module, use git diff to see them yourself"), not a wall of pasted content — the target agent has its own `read`/`grep`/`bash` to re-derive ground truth, that's cheaper and can't go stale.
 - **Chain stops at the first failed step.** No partial continuation, no automatic retry — a failed step surfaces to you as the caller; decide whether to fix and re-dispatch or ask the user.
+- **A chain result only exposes the last step's output.** You cannot inspect what an intermediate step actually produced (i.e. the literal text `{previous}` got substituted with) from the caller side — only the final agent's response comes back. If verifying an intermediate step's exact output matters, dispatch it standalone (`single`) instead of burying it in a chain.
 - **Parallel is capped at 8 tasks total, 4 running concurrently.** If a task genuinely needs more independent angles than that, batch it into rounds rather than trying to force one call over the limit.
 - **Every task (single/parallel/chain step) accepts a `cwd`** — this is what makes Race mode safe (see below); for scout/planner/reviewer you normally leave it unset and let it default to the current directory, since they're read-only and can't collide with anything.
 
@@ -100,7 +101,7 @@ Race needs two or more *real* implementations to compare, which means real file 
 1. Create one git worktree per variant off the current branch: `git worktree add ../<repo>-race-<label> -b race/<slug>-<label>`.
 2. Parallel-dispatch `builder`, one task per variant, each with `cwd` pointing at its own worktree: `{ tasks: [{ agent: "builder", task: "<approach A>", cwd: "../<repo>-race-a" }, { agent: "builder", task: "<approach B>", cwd: "../<repo>-race-b" }], agentScope: "both", confirmProjectAgents: false }`.
 3. Compare results — diffs, what each builder verified, trade-offs reported. Dispatch `reviewer` against each worktree (`cwd` set the same way) if an independent judgment is worth it.
-4. Once a winner's picked: merge/cherry-pick its branch into the real one, then `git worktree remove` the others (including the winner's worktree once merged) — don't leave them lying around.
+4. Once a winner's picked: merge/cherry-pick its branch into the real one, then remove each worktree — `git worktree remove <path>` takes exactly one path per call, run it once per variant (including the winner's worktree once merged), don't leave them lying around. A dispatched `builder` running tests/builds typically leaves untracked artifacts behind (e.g. `__pycache__/`) that make plain `remove` refuse — check `git status` in the worktree first; `--force` is fine once you've confirmed it's only build/test byproducts, not real uncommitted work. Then delete the branches: the winner's is merged, `git branch -d` works; the loser's is not, that needs `git branch -D`.
 5. If this Race was big enough to warrant a `.pi/work/<slug>/` directory, record the comparison and the decision in it before cleanup.
 
 ## Working style

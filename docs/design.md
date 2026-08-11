@@ -321,6 +321,17 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 
 会话导出文件本身（大、含完整 thinking、纯个人排错记录）不进 git——`.gitignore` 加了 `*.jsonl`；`retro.md` 只要求一个本地路径，用完可以随手清理。
 
+### 第一次全链路 `/smoke-test`：GitHub Codespace 里真实跑通
+
+在真实 Codespace 容器（`/.dockerenv` + `CODESPACES=true`，不是本地 macOS）里跑了 `.pi/prompts/smoke-test.md` 的完整 16 步，结果 **15 pass / 1 partial**——覆盖了容器确认、启动扫描、纯问答路由、单会话小任务（技能自动加载）、git 分支门禁、并行 scout dispatch、chain dispatch、Guard 门禁、完整 spec-driven 生命周期、**Race 模式全链路**（首次真实跑通）、四个 prompt template。跑完导出 `test.jsonl`，按 `retro.md` 的方法过了一遍，只对"文档缺口"类出了修改，其余（如 reviewer 没执行逐字引用指令这种一次性模型失误）按 `retro.md` 的分类原则记录不改：
+
+1. **Chain 结果只暴露最后一步的输出**（Step 9 partial 的根因）——调用方拿不到中间步骤 `{previous}` 被替换成的具体文本，只能看到链条最后一个 agent 的回复。`AGENTS.md`"Mechanics worth knowing"补了一条：需要核实某个中间步骤的确切输出时，用 `single` 单独 dispatch 那一步，别指望从 chain 结果里看到。
+2. **Race 清理步骤和真实情况有出入**（Step 12，"pass with deviations"）——`builder` 跑测试会留下未追踪的构建产物（这次是 `__pycache__/`），导致 `git worktree remove` 直接拒绝；根因是仓库 `.gitignore` 本来就没盖 `__pycache__/`（已在 `.gitignore` 补上 `__pycache__/`/`*.pyc`/`.pytest_cache/`，这是永久性修复，不只是这次测试的临时绕过）。另外 `git worktree remove` 一次只认一个路径，输家分支是没合并的，删除要用 `-D` 不是 `-d`——原来 `AGENTS.md` 第 4 步写得含糊（"remove the others"容易让人以为能批量/一步到位），已改成显式的逐个操作说明。
+3. **`/changelog` 对 `.pi/work/` 文档提交的分类没写清楚**——`docs` 类型默认归到 Changed，但 `.pi/work/<slug>/` 下的 spec/plan/tasks/build-log/validation 提交是某个 feature 自己的过程记录，不该在 changelog 里单独出现（已经有对应的 `feat`/`fix` 条目覆盖用户可见的部分了）。`changelog.md` 加了这条例外。
+4. **`smoke-test.md` 自己的一个要求本身不可能被满足**——Phase 0 要求"确认 pi 启动 banner 的 `[Agents]` 分区"，但同一个 session 看不到自己启动时的 banner；已把这一步改成用"dispatch 成功"本身当证据，不再要求一个结构性看不到的东西。
+
+这轮验证也确认了几件更重要的事：容器边界假设成立（真实检测到 `/.dockerenv`）、`agentScope`/`confirmProjectAgents` 的文档加固在真实环境里生效（Step 8 三个并行 scout 一次成功，没再复现上一轮的坑）、Guard 门禁真的会拦下东西（reviewer 抓到一个 NaN/inf 边界问题）、Race 模式端到端可用（两个 `builder` 各自 worktree 并行实现、真实 diff 比较、合并赢家、清理）。
+
 ---
 
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。

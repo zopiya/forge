@@ -9,7 +9,7 @@ If there's no disposable toy code to act on yet, create a small one now in whate
 **Phase 0 — Environment**
 
 1. Confirm this is running in a container (not bare metal) and say how you know.
-2. Confirm `.pi/extensions/subagent/` loaded — check the pi startup banner's `[Agents]` section — and list the agents it discovered.
+2. Confirm `.pi/extensions/subagent/` loaded. The startup banner itself isn't visible from inside the same session that produced it — a passing dispatch (Phase 3) is the real evidence; for now, just confirm the `subagent` tool is registered and note which agents you'd expect it to discover.
 
 **Phase 1 — Routing basics**
 
