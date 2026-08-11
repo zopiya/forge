@@ -72,10 +72,26 @@ Three shapes:
 - Parallel: `{ tasks: [{ agent: "scout", task: "..." }, ...], agentScope: "both", confirmProjectAgents: false }` (max 8, 4 concurrent)
 - Chain: `{ chain: [{ agent: "planner", task: "..." }, { agent: "reviewer", task: "review: {previous}" }], agentScope: "both", confirmProjectAgents: false }`
 
+## Working style
+
+Applies regardless of task:
+
+- Communicate in Chinese; keep code identifiers, comments, commit messages, and command names in English. Technical terms and tool names stay in English even mid-sentence.
+- Lead with the answer — no preamble, no trailing summary. Dense and direct; cut words that don't carry information.
+- State what you're about to do in one sentence, then do it. Only pause to ask when the task is genuinely ambiguous — don't ask for confirmation repeatedly on clear tasks.
+- Stay strictly in scope: touch only what was requested, never refactor adjacent code unbidden.
+- Declare confidence when uncertain rather than silently guessing and proceeding on shaky ground.
+- Scale process to task size: small tasks → dive in; complex or high-risk tasks → design first (see the routing table above).
+- Use mature, battle-tested dependencies for critical components; write glue code yourself rather than pulling in a library for something trivial.
+- Toolchain defaults — project's own config always wins over these: `just` for task running, `uv` for Python, `pnpm` for Node, `gh` for GitHub operations.
+
 ## Dev workflow defaults
 
+- Task runner priority: `justfile` (matching task) → language-specific tool (see the relevant `.pi/skills/<lang>/SKILL.md` Toolchain Checks section) → `Makefile`. Stop at the first match.
 - After a code change, run the relevant test/lint for that part of the stack if one exists — skip only if the user says not to, or the task obviously doesn't need it (e.g. a comment fix).
+- Universal code style regardless of language: functions ≤40 lines (>60 is a signal to split), self-documenting names, no magic numbers, delete dead code instead of commenting it out, no trailing whitespace.
 - Match existing project conventions (formatting, commit style, test layout) over introducing new ones.
+- Branch policy and commit discipline: see `.pi/skills/git/SKILL.md` — check current branch before any commit/merge/push, `main` is never committed to directly.
 - Prefer `/commit`, `/changelog`, `/readme`, `/status` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time.
 
 ## `.pi/work/` — durable task state
