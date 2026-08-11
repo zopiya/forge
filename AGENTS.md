@@ -56,6 +56,22 @@ Everything defaults to running in this session. Dispatch to one of these only wh
 
 There is no dedicated `build`/`debug`/`general` agent file — that's just this session, doing the work directly.
 
+### How to actually dispatch
+
+Dispatching uses the `subagent` tool (vendored in `.pi/extensions/subagent/`, from pi's own reference implementation). Its default scope is `"user"` (`~/.pi/agent/agents/`), which does **not** see this project's agents — every call here must pass:
+
+```jsonc
+{ "agentScope": "both", "confirmProjectAgents": false, ... }
+```
+
+`"both"` picks up project-local agents (`.pi/agents/`) without losing anything defined at the user level. `confirmProjectAgents: false` skips the tool's own "run project-local agents?" prompt — consistent with the container-first, no-extra-confirmation stance in `APPEND_SYSTEM.md`; leave it at the default `true` if this is ever run somewhere that assumption doesn't hold.
+
+Three shapes:
+
+- Single: `{ agent: "scout", task: "...", agentScope: "both", confirmProjectAgents: false }`
+- Parallel: `{ tasks: [{ agent: "scout", task: "..." }, ...], agentScope: "both", confirmProjectAgents: false }` (max 8, 4 concurrent)
+- Chain: `{ chain: [{ agent: "planner", task: "..." }, { agent: "reviewer", task: "review: {previous}" }], agentScope: "both", confirmProjectAgents: false }`
+
 ## Dev workflow defaults
 
 - After a code change, run the relevant test/lint for that part of the stack if one exists — skip only if the user says not to, or the task obviously doesn't need it (e.g. a comment fix).

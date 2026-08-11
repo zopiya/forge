@@ -1,9 +1,11 @@
 # Forge — 基于 pi 的 coding agent harness 设计方案
 
-> 状态：draft，待确认后再落地执行
+> 状态：P1+P2 已落地（见根目录），文档随实现同步更新
 > 前身：opencode-harness / Conductor
 > 目标运行时：https://pi.dev (earendil-works/pi)
 > 命名说明："Forge" 是这套方法论/设计层的名字，不是目录命名空间——落盘路径仍用 pi 自己的 `.pi/` 前缀（类似 `.git/`），两者不冲突
+>
+> **勘误（落地后发现）**：3.3/3.8/第 5 节原来断言"v1 不需要写任何 extension 代码"，这个判断是错的。`.pi/agents/*.md` 的发现和 dispatch（single/parallel/chain）**不是 pi 核心功能**，完全由 pi 自带的一个示例 extension 定义和实现——不装这个 extension，`.pi/agents/*.md` 就是没人读的死文件，pi 启动 banner 也不会有 Agents 分区。已把这个 extension 原样 vendor 进 `.pi/extensions/subagent/`（`index.ts` + `agents.ts`，来自 pi 官方 `examples/extensions/subagent/`）。"不做 guardrail extension" 这条结论不受影响，"完全不需要 extension 代码"这条不成立。另外这个 tool 的 `agentScope` 默认是 `"user"`（只认 `~/.pi/agent/agents/`），dispatch 时必须显式传 `agentScope: "both"` 才能看到项目里 `.pi/agents/` 下的定义，见 `AGENTS.md`"How to actually dispatch"。
 
 ---
 
