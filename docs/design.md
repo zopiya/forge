@@ -528,4 +528,46 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 ---
 
+### 9.12 逛了一圈 pi.dev/packages 之后：只吸收判断标准，不是照单全收
+
+起因是你看到 `pi.dev/packages` 上一堆社区包（MCP adapter、web-access、结构化问卷等），问要不要引进来。查了实际页面内容（60 个包，绝大多数是个人发布的第三方 npm 包，跟目前 vendor 进来的七个官方 `examples/extensions/` 完全不是一个信任等级）之后的结论：
+
+- **MCP adapter**——不引入。§3.9 已经用具体论点（每会话常驻 token 注入、多数场景原生 CLI 就够）拒绝过 MCP，市面上出现一个 adapter 不改变这个 trade-off，除非有个具体工具真的没有 CLI/API 可以直接 `bash` 调用。
+- **web-access（搜索+抓取+clone+PDF+YouTube 打包）**——不引入。YAGNI：这五件事目前没有一件是被验证过的真实缺口；真要用，最小代价是照 §3.9 已经定的模式写一份 skill 文档说明 `curl`/`gh` 怎么用，不是装一整个 extension。
+- **第三方结构化问卷（`@juicesharp/rpiv-ask-user-question`）**——不引入，§9.11 刚补的 `questionnaire.ts` 就是同一件事，来源还更可信（pi 官方 example，不是个人 npm 包）。
+
+你的反馈把判断标准往前推了一步：不是"官方来源就一定用，第三方来源就一定不用"，而是——**官方 vendor 优先，因为省 review 成本；没有合适的官方对应物、但确实有真实缺口时，参考思路自己写，不引入外部代码**；无论哪种，都要有具体 ROI，不能为了"看起来该有"而装。按这个标准重新过了一遍官方 `examples/extensions/README.md` 里没 vendor 过的条目，找到三个：
+
+| 名字 | 来源 | 处理 |
+|---|---|---|
+| `protected-paths.ts` | 官方 vendor，修了两处真缺陷 | 见下 |
+| `dirty-repo-guard.ts` | 官方 vendor，原样 | 见下 |
+| `doom-loop-guard.ts` | 参考 `pi-anti-doom-loop`（第三方包）的**思路**，从零自己写 | 见下 |
+
+**`protected-paths.ts`**——静默拦截对 `.env`/`.git/`/`node_modules/` 的 `write`/`edit`，不弹窗。之所以不算重新打开 §3.4 拒绝掉的"确认弹窗"口子：它防的不是容器内的破坏性操作（容器本来就兜得住），是**泄露到容器外的东西**——密钥一旦被 commit/push，容器一次性这个属性完全救不了，这是容器边界确认覆盖不到的真实缺口。vendor 时修了两处，都是这轮审计已经验证过的同类问题：
+1. upstream 只读 `event.input.path`，但内置 write/edit 工具实际接受 `path` 或 `file_path` 两种字段名（`dist/core/tools/write.js`: `args?.file_path ?? args?.path`）——跟 §9.11 修的 `glob`/`find` 是同一类"假设字段名"的坑，只不过这次是运行时直接 `undefined.includes()` 抛异常，不是静默失效。已改成两个字段名都读。
+2. upstream 用 `path.includes(".env")` 子串匹配，会误伤 `some.envfile.txt` 这类无关文件；`.git/`/`node_modules/` 同理。改成按路径 segment 精确匹配（basename 等于 `.env` 或以 `.env.` 开头；任意目录 segment 等于 `.git`/`node_modules`），顺带把 `\` 归一化成 `/`，Windows 路径下行为一致。
+
+**`dirty-repo-guard.ts`**——session 切换/新建/fork 时如果仓库有未提交改动，弹一次确认（非交互模式下直接拦截）。原样 vendor，没改。这个看起来像确认弹窗，但风险类型和 §3.4 拒绝掉的不一样：§3.4 防的是"容器已经兜底的不可逆操作"，这个防的是**脑子里还没落盘的工作被 session 切换/fork 弄丢**——容器还在、仓库还在，丢的是你刚才想清楚但还没 commit 的那部分，容器边界完全不覆盖这层损失。跟"多 worktree 并行"这个核心场景直接相关，值得这一次交互成本。
+
+**`doom-loop-guard.ts`**——`pi.dev/packages` 上 `pi-anti-doom-loop` 的一句话简介是"检测并阻断连续重复的相同 tool call"，官方 examples 里没有对应实现，但这确实是目前零覆盖的一个真实稳定性盲区。没有读那个第三方包的源码，也没有照抄任何外部代码——按 `plan-mode`/`protected-paths` 已经验证过的同一套机制（`pi.on("tool_call")` 返回 `{block: true, reason}`）从零写了一个几十行的最小版本：同一个 tool（名字+参数完全一致）连续出现满 3 次时拦截第 3 次，`session_start` 时清空计数。头部注释如实声明了一个已知简化：按调用形状比较，不看结果，如果 Forge 以后真的需要一个后台轮询类的 extension，这条判断需要重新评估——先写在这，不是等以后踩坑才发现。
+
+这三个的落地方式，正好对应你这轮定的规则：官方来源→vendor 到自己仓库、按需修正真缺陷；没有官方对应物但有真实需求→参考思路自己写、不引入外部代码；任何一种都不是"因为列表里有就装"。
+
+---
+
+### 9.13 全量插件健壮性审计
+
+按你的要求，对 `.pi/extensions/` 下当时的全部 11 个 extension（含刚加的三个）逐个过了一遍代码本身的健壮性，不只是文档一致性。方法：对每个 hook 站在"如果这是被 `subagent` dispatch 出去的非交互子进程（`pi --mode json -p --no-session`），行为还对不对"这个角度重新看一遍——这是 Forge 的核心机制之一，也是最容易被忽略的运行环境。找到两处真问题，都已修复：
+
+**`notify.ts`——非交互模式下会污染 dispatch 的 JSON 流，这不是猜测，是复现出来的。** upstream 的 `agent_end` handler 不看 `ctx.hasUI`，无条件触发终端通知。§9.11 验证 `questionnaire.ts` 时跑的那次真实 `pi --mode json -p` 会话，日志里能直接看到 `]777;notify;Pi · forge;...` 这段 OSC 序列原样嵌进了 JSON 输出流，紧贴着 `{"type":"agent_end",...}` 那一行——`subagent`/index.ts 的 `processLine` 按行 `JSON.parse`，解析失败就 `catch { return; }`，静默丢帧。这次丢的具体是 `agent_end` 事件（`subagent` 本来就不消费这个类型，无感），但同样的写入时机换一次就可能砸中真正要用的 `message_end` 行，静默丢失一个 dispatched agent 的最终输出，调用方只会看到"(no output)"，没有任何报错可查。而且即使不考虑数据损坏，ntfy 通道在非交互模式下也会跟着每个 dispatched 子进程各发一条推送——一次 8 路并行 scout 就是 8 条手机推送，跟"等待输入"这个通知本来的语义完全不符（`-p` 进程处理完就退出，从来没有"等待输入"这个状态）。修法是把整个 `notify()` 调用挂到 `ctx.hasUI` 后面——这也是 `custom-footer.ts`（`session_start`）和 `plan-mode`（自己的 `agent_end`）已经在用的同一个判断，notify.ts 加功能的时候漏掉了。
+
+**`plan-mode/utils.ts`——三个允许列表条目能绕过"只读"保证。** `SAFE_PATTERNS` 里 `find`/`curl`/`sort` 是无条件放行的（`/^\s*find\b/` 等），`DESTRUCTIVE_PATTERNS` 只有一条通用的 `>` 重定向检测，抓不住这三个工具"不经过 shell 重定向符也能写文件"的旗标：`find ... -delete`/`-exec .. \;`/`-fprintf FILE`（直接删除/执行/写文件）、`curl -o`/`-O`/`--output`（把远程内容写到本地文件）、`sort -o FILE`（原地覆写）。这些命令字符串里根本没有 `>` 字符，现有规则形同虚设。补了三条 `DESTRUCTIVE_PATTERNS`，用 bun 实际跑了 8 个用例验证（`find -delete`/`curl -o`/`sort -o` 三个真被拦，`find -type f`/`curl -s`/`sort file.txt`（无 `-o`）三个未被误伤，外加两个既有安全命令回归），全部符合预期，不是纸面判断。
+
+**明确没有去做的**：没有试图把这套正则做成"完整的 shell 命令安全解析"——plan mode 从设计上就不是安全边界（真正的边界是容器，§3.1/§3.4），这轮只关掉了两个具体、可复现、模型确实可能顺手用到的缺口，不是要证明这份 allowlist 覆盖完备（做不到，纯字符串正则天然做不到）。`protected-paths.ts` 同理留了一个已知局限没处理：按路径字符串匹配 `.git`/`node_modules`/`.env`，不解析符号链接，一个专门指向 `.git/hooks/` 之外的软链接可以绕过——这不是这轮的疏漏，是权衡后不做（对手不是攻击者，是可能糊涂的同一个 agent，ROI 不够支撑再往下做 realpath 解析）。`trigger-compact.ts` 也复查了一遍：如果一个 session 从一开始 token 数就已经超过 100k（比如某个 handoff 出去的新会话），"跨越阈值"这个判断永远不会触发，因为它只在"从低于阈值变成高于阈值"这个跳变点上触发——这是 upstream 原有行为，没改，记在这里是因为下次如果真的踩到这个坑，不用重新排查一遍。
+
+其余 extension（`subagent`、`session-name`、`handoff`、`questionnaire`、`dirty-repo-guard`、`custom-footer`、`doom-loop-guard` 本身）逐个看过 `ctx.hasUI`/`ctx.mode` 相关的分支，没再找到同类问题——`dirty-repo-guard.ts` 的 `!ctx.hasUI → { cancel: true }` 和 `custom-footer.ts`/`plan-mode` 已有的 `ctx.hasUI` 判断本来就是正确模式，这次只是把 `notify.ts` 补齐到同一个标准。`doom-loop-guard.ts` 自己也顺手补了一处防御：`JSON.stringify` 遇到不可序列化输入（理论上极少见）时不再直接抛异常，退化成"这次不计入循环检测"而不是让整个 tool_call 钩子崩掉。
+
+---
+
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。

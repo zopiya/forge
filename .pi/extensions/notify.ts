@@ -33,6 +33,18 @@
  *        OSC. Used only as a fallback when passthrough is off, so it doesn't
  *        double up with a real desktop notification when passthrough *is*
  *        configured.
+ * - Gated the whole `notify()` call on `ctx.hasUI` (robustness audit,
+ *   docs/design.md §9.13). Upstream fires unconditionally on `agent_end`,
+ *   which includes every non-interactive `pi --mode json -p` run — exactly
+ *   what `subagent` dispatch uses for scout/planner/reviewer/builder. Two
+ *   concrete problems, not hypothetical: (1) notifyTerminal()/
+ *   notifyTmuxNative() write raw OSC/BEL bytes to process.stdout, which in
+ *   `--mode json` is the same line-delimited JSON stream the dispatching
+ *   subagent tool parses — confirmed to actually splice garbage into a
+ *   dispatched run's output and silently corrupt whichever JSON line it
+ *   landed on; (2) even the ntfy channel firing per dispatched subprocess
+ *   would spam a push per parallel task (up to 8) for a "waiting for input"
+ *   state that a non-interactive one-shot process never has.
  *
  * Sends a notification when Pi agent is done and waiting for input.
  * Terminal protocols:
@@ -181,7 +193,20 @@ function previewOf(text: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.on("agent_end", async (event) => {
+	pi.on("agent_end", async (event, ctx) => {
+		// Non-interactive runs (subagent dispatch uses `pi --mode json -p` for
+		// every scout/planner/reviewer/builder call) have no one "waiting for
+		// input" to notify — and worse, notifyTerminal()/notifyTmuxNative() write
+		// raw OSC/bell bytes straight to process.stdout, which in --mode json IS
+		// the line-delimited JSON transport the dispatching subagent tool parses.
+		// Confirmed empirically: those bytes showed up spliced into a dispatched
+		// run's JSON output, corrupting whichever line they landed on (silently
+		// dropped by the caller's `catch { return }`, i.e. a lost event with no
+		// error surfaced). Gating on ctx.hasUI matches the pattern every other
+		// extension here already uses for this exact distinction (custom-footer's
+		// session_start, plan-mode's agent_end, trigger-compact's notify calls).
+		if (!ctx.hasUI) return;
+
 		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
 		const body = previewOf(lastAssistant ? getTextContent(lastAssistant) : "");
 		const title = `Pi · ${path.basename(process.cwd())}`;

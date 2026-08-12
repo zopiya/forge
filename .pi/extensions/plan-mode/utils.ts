@@ -38,6 +38,13 @@ const DESTRUCTIVE_PATTERNS = [
 	/\bsystemctl\s+(start|stop|restart|enable|disable)/i,
 	/\bservice\s+\S+\s+(start|stop|restart)/i,
 	/\b(vim?|nano|emacs|code|subl)\b/i,
+	// The three below close real bypasses of the read-only guarantee: SAFE_PATTERNS
+	// below allowlists `find`/`curl`/`sort` unconditionally, but each has a flag that
+	// writes to disk without ever producing the literal ">" the generic redirect
+	// check above looks for (docs/design.md §9.13 robustness audit).
+	/\bfind\b.*-(delete|exec|execdir|ok|okdir|fprintf)\b/i,
+	/\bcurl\b.*(-o\b|-O\b|--output\b|--output-dir\b|--remote-name\b|--remote-name-all\b|-J\b)/i,
+	/\bsort\b.*-o\b/i,
 ];
 
 // Safe read-only commands allowed in plan mode
