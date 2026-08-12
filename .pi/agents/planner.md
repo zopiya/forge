@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Architecture and requirements thinking — produces a plan, spec, or task breakdown for a task complex enough to earn one. Read-only; never writes code or files directly.
-tools: read, grep, glob, ls
+tools: read, grep, find, ls
 # model: deferred on purpose, see docs/design.md §6
 ---
 

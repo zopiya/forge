@@ -1,7 +1,7 @@
 ---
 name: builder
 description: Full read/write/bash implementer, dispatched only for Race mode — implements one variant of a solution inside an isolated git worktree so parallel attempts don't collide on the filesystem. Never used for normal single-path implementation; that stays in the main session.
-tools: read, grep, glob, ls, write, edit, bash
+tools: read, grep, find, ls, write, edit, bash
 # model: deferred on purpose, see docs/design.md §6
 ---
 

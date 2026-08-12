@@ -517,4 +517,15 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 ---
 
+### 9.11 自主审计：两处"看起来对、实际不生效"的静默失效
+
+跑了一轮不针对任何具体需求的全面自审（"寻找不足、打磨、熵减"），方法是对着**实际安装的 `pi` 二进制**（`/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent@0.84.1`）核对 `AGENTS.md`/`.pi/agents/*.md` 里写的工具名和机制假设，而不是只读文档互相对照——这轮抓到的两个问题都是"配置看起来合理，pi 内部把不认识的东西静默丢弃，所以没有任何报错，但也没有任何效果"这一类，属于最难靠读 diff 发现的坑：
+
+1. **`glob` 不是 pi 的工具名，实际叫 `find`**——`scout`/`planner`/`reviewer`/`builder` 四个 agent profile 的 frontmatter 全部写的是 `tools: read, grep, glob, ls[, ...]`。核对 `dist/core/tools/` 目录和 `pi --help` 里 `--tools` 的官方示例（`pi --tools read,grep,find,ls -p "..."`）确认：内置工具就叫 `find`，从来没有 `glob`。`agent-session.js` 里 `setActiveToolsByName` 的原话是"Only tools in the registry can be enabled. Unknown tool names are ignored"——不认识的工具名不报错，直接从有效工具集里消失。后果是四个 dispatch 出去的 agent 里，`glob` 这一项从建立起就没生效过，`scout.md` 第 13 条"prefer grep/glob over reading whole files"这条指令实际上无工具可用；因为 `subagent` 工具只把最终结果文本带回来（§7.2 已经记过这个机制），这种"工具没生效但没报错"的失效模式在正常使用中几乎不可能被注意到。已把四个文件的 `glob` 全部改成 `find`，`scout.md` 的第 13 条也同步改了措辞。
+2. **`plan-mode` 的系统提示引用了一个从未 vendor 过的工具**——`.pi/extensions/plan-mode/index.ts`（原样 vendored，未改动这部分）的 `PLAN_MODE_TOOLS` 里有 `"questionnaire"`，`before_agent_start` 的提示文本也明确写"Ask clarifying questions using the questionnaire tool"。但 §9.2 当初引入的六个 extension 里没有 `questionnaire.ts`——upstream 的 `plan-mode` 本来就假设它作为姊妹 extension 一起装（`examples/extensions/questionnaire.ts`，独立文件，无额外依赖），这轮之前一直没人注意到这个隐含依赖没被满足。效果和上一条同源：`questionnaire` 从有效工具集里静默消失，plan mode 自己的提示词指向一个不存在的工具。处理方式与 §9.1 定的 vendor 规则一致——原样搬进 `.pi/extensions/questionnaire.ts`，头部注释按 Forge 的记录习惯写明"为什么现在才补、修的是哪个依赖"。至此 vendored extension 数量是 subagent + 7（原六个 + questionnaire），不是 6。
+
+两处都不属于"设计判断"，是纯粹的核对疏漏——记在这里是因为它们的失效模式（静默丢弃而非报错）值得当一条通用经验：以后新增/修改任何 `tools:` frontmatter 或任何依赖 pi 内置工具名的地方，核对对象应该是实际二进制的工具注册表或 `--help` 输出，不能只凭记忆或凭别的 extension 里出现过的名字类推。
+
+---
+
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。

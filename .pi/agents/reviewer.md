@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Independent review of a completed change — correctness, security, and whether it actually does what it claims. Has bash to verify claims by running things, but never writes or edits code.
-tools: read, grep, glob, ls, bash
+tools: read, grep, find, ls, bash
 # model: deferred on purpose, see docs/design.md §6
 ---
 
