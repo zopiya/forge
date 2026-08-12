@@ -334,4 +334,187 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 
 ---
 
+## 9. Extension 生态调研 + 批量引入（功能/体验类，非护栏）
+
+跑了几轮真实 session 之后做了一次针对 pi 官方 extension 生态（`earendil-works/pi` 的 `examples/extensions/`，以及独立仓库 `pi-review`/`pi-review-loop`）的系统调研，目的是"功能拓展 + 细节打磨"，不是补护栏——你的实际使用场景主要是 GitHub Codespaces，容器隔离已经有了，§3.4 的 sandbox extension 之类不需要。
+
+### 9.1 两种安装机制，结论决定了怎么落地
+
+调研过程中确认了 pi 有两条独立的"装东西"路径，行为差别很大，值得记下来避免以后重问：
+
+| 方式 | 落盘位置 | Clone 后要不要额外操作 |
+| --- | --- | --- |
+| **vendor 源码**（像 `subagent` 一样，`.ts` 直接抄进 `.pi/extensions/` 并 commit） | 就在仓库里 | 不需要，pi 启动自动 discovery（`.pi/extensions/*.ts` / `*/index.ts`），只需过一次性的项目信任确认（`trust.json`，按文件夹路径记，父目录可继承） |
+| **`pi install`** | 默认写 `~/.pi/agent/settings.json`（用户级，不进仓库）；带 `-l` 才写 `.pi/settings.json`（项目级，可进仓库），实际包代码缓存在 `.pi/npm/`/`.pi/git/<host>/<path>`（不进仓库，类似 `node_modules`） | 用 `-l` 的话，pi 官方文档原话："pi installs any missing packages automatically on startup after the project is trusted"——teammate clone 后过一次信任确认，pi 自动补装，不需要手动重新 `pi install` |
+
+**这批（P2.5）全部用 vendor 方式**，因为都是官方 `examples/extensions/` 里的独立小文件、没有外部依赖，vendor 最简单、clone 即用、零网络依赖。`pi-review` / `pi-review-loop` 是维护在独立仓库的完整包，**调研过了但这轮先不落地**——真要装的话应该用 `pi install -l git:github.com/earendil-works/pi-review`（`.gitignore` 要记得补 `.pi/npm/`、`.pi/git/` 两行），不要手动 vendor 会跟不上上游更新。记这笔是为了不让以后的自己重新做一遍同样的调研。
+
+### 9.2 引入的六个 extension
+
+跟 `subagent` 一样，全部原样搬自 `earendil-works/pi` 的 `examples/extensions/`，只有两处必要的偏离（都记在对应文件的头部注释里，不只是这里）：
+
+| Extension | 加的能力 | 为什么选它 |
+| --- | --- | --- |
+| `plan-mode/` | `/plan`（或 `--plan`、Ctrl+Alt+P）——只读探查：写工具关掉，bash 限制成只读白名单，agent 先出一份编号 `Plan:` 再动手；`[DONE:n]` 标记执行进度，`/todos` 查看 | 补的是 `AGENTS.md` 路由表里"一次坐下的多阶段任务，不需要跨会话恢复"这一档——之前只能靠对话里裸写 TODO，现在有了执行期防误写 + 进度可视化，比升档 `.pi/work/` 轻。**偏离**：upstream 的系统提示里有一行"Use brave-search skill via bash for web research"，Forge 没有这个 skill，已删掉这行，见 `plan-mode/index.ts` 头部注释。 |
+| `custom-footer.ts` | `/footer` 切换状态栏：token 用量/花费 + session name + git branch + 当前 model | Race 模式重度依赖多 worktree 并行，branch 信息默认看不到。**偏离**：upstream 默认关闭、要手动 `/footer` 开；改成 `session_start` 时默认开。追加打磨（cost 超阈值变色、session name 段）见 §9.4。 |
+| `session-name.ts` | `/session-name [name]` 给 session 命名，session selector 里显示这个名字而不是第一条消息 | 配合 `.pi/work/<feature-slug>` 命名约定，多任务并行时一眼认出哪个 session 对应哪个 feature。未改动。 |
+| `notify.ts` | agent 跑完（`agent_end`）自动发终端通知 + ntfy 推送，探测终端类型选协议（OSC 777 / OSC 99 Kitty / Windows Toast） | 长 dispatch（parallel/chain）跑的时候人常常切到别的窗口，跑完了要通知；服务器/无人盯着的场景靠 ntfy。追加打磨见 §9.4。 |
+| `handoff.ts` | `/handoff <goal>` 把当前会话的关键决策/进度提炼成一段自包含 prompt，开新 session 继续，而不是简单 compact 丢信息 | 长会话（比如跑完一次 `/smoke-test` 或 `/retro`）后要接着做具体修复时，比手动重新交代上下文省事。未改动。 |
+| `trigger-compact.ts` | 超 100k token 自动 compact；`/trigger-compact [instructions]` 手动触发 | §7.1 已经确认 dispatch 贵在真实进程/模型开销，chain/parallel 场景 context 涨得快，这个减少手动 `/compact` 的次数。未改动。 |
+
+`todo.ts`（另一个官方示例，纯任务清单 `/todos`）调研过但没装——跟 `plan-mode` 功能重叠（`plan-mode` 也注册了 `/todos`，且多了执行期防误写和进度条），二选一选了更完整的那个。
+
+### 9.3 遗留的收尾项
+
+如果以后真要装 `pi-review` / `pi-review-loop`，别忘了：
+1. `pi install -l git:github.com/earendil-works/pi-review`（`-l` 不能漏，漏了就只装到 `~/.pi/agent/settings.json`，teammate clone 不会自动带上）
+2. `.gitignore` 补 `.pi/npm/` 和 `.pi/git/` 两行，防止把下载缓存误提交
+
+### 9.4 落地后追加打磨：ntfy 推送 + footer 视觉细节
+
+批量引入之后又做了一轮"使用体验"打磨，动机是你的实际场景——pi 经常在服务器/Codespaces 上跑，人不一定盯着终端：
+
+- **`notify.ts` 加了 ntfy.sh 推送通道**（`notifyNtfy`），跟原有的终端协议（OSC 777/99/Windows Toast）并存，不是替换。原因很直接：OSC 系列通知只有终端真的开着、attach 着的时候才看得到，detached tmux、关了盖子的笔记本、没人看的 Codespace 标签页都收不到。ntfy 是 HTTP POST 到一个 topic 就完事的推送服务，不需要 SMTP 账号/API key 这类要管理的凭证，配一个环境变量 `PI_NTFY_TOPIC` 就好，手机装 ntfy app 订阅同名 topic 即收。默认不开（没设 `PI_NTFY_TOPIC` 就整个函数直接 return，不发请求），改的人自己决定要不要用。`PI_NTFY_SERVER` 可以指向自建实例，不强制用公共 `ntfy.sh`（topic 在公共服务器上是无认证的，谁知道 topic 名字谁就能读，这个安全边界已经写进代码注释）。
+  - 邮件通知调研过但没做：比 ntfy 多一层 SMTP/邮件 API 凭证管理，这类凭证不适合放进一个"读环境变量就完事"的轻量 extension，真要做建议走一个中间层（比如一个专门转发到邮件的 webhook），不在这轮范围内。
+  - 顺带把通知内容从写死的 "Ready for input" 改成 agent 最后一条消息的预览（截断到 160 字符），标题带上当前工作目录名——服务器上可能同时跑好几个 pi 实例，锁屏通知上要能分清是哪个。
+- **`custom-footer.ts` 加了三处视觉细节**：
+  1. Cost 数字超过 `COST_WARN_THRESHOLD`（$1）就变成 warning 色——不是硬限制，是个视觉提醒，呼应 §7.1 已经确认的事实（dispatch 花的是真金白银，chain/parallel 每一步都在 spawn 真实的 pi 子进程）。
+  2. Footer 里加了 session name 这一段（`pi.getSessionName()` 读 `session-name.ts` 设的名字），跟 branch、model 用统一的分隔符（`  ·  `）连接，视觉上比原来"tokens + 括号里塞 branch"的写法更有层次。
+  3. **加了 context window 用量的方块进度条**（`renderContextBar`，10 个字符，`█`/`░`）。这不是凭空加的视觉效果——读了 pi 自己的内置 footer 源码（`packages/coding-agent/src/modes/interactive/components/footer.ts`）才发现它本来就在算 `ctx.getContextUsage()` 并在 70%/90% 阈值上变色（`warning`/`error`），只是没有条形可视化。条形是这轮唯一真正"装饰性"的加法，克制在单色 + 复用同样的两个阈值，没有动画、没有渐变色——Claude Code 自己的状态栏对 context 占用也是同一个理由给可视化：这个百分比直接预测 `trigger-compact` 什么时候会触发，眼睛扫一眼比从原始 token 数心算更快。
+     阈值和数据源直接复用 pi 内置 footer 的实现，不是自己拍的新数字——避免"这个 extension 的 context% 和 pi 原生显示的 context% 对不上"这种以后要重新排查的坑。
+
+两个文件的改动都记在各自文件头部的注释里（"Deviations from upstream"），不只是这里——这是延续 `plan-mode`/`subagent` 已经在用的记录习惯：以后升级到 upstream 新版本时，diff 一下头部注释列的点就知道哪些地方是故意偏离的，不用重新猜一遍。
+
+### 9.5 tmux 场景加固
+
+你提到实际用法是"服务器上跑，tmux 里开着，人不一定在看"——这是 §9.4 加 ntfy 时已经预见但没细做的一个子场景。查了 tmux 自己怎么处理 OSC 转义序列之后，发现原来的 `notifyTerminal`（OSC 777/99）在 tmux 里有个真实的坑，不是猜的：
+
+- **tmux 默认不转发 OSC 序列。** `allow-passthrough` 这个选项从 tmux 3.3 才有，且**默认关**。关的时候，tmux 要么直接吞掉不认识的 OSC（安静但没用），要么在旧版本上把裸转义字节当普通文本漏到 pane 里，屏幕上会看到一坨 `]777;notify;...` 之类的乱码——这是一个有据可查的老问题，不是 Forge 独有。
+- 所以 `notify.ts` 现在先用 `tmux show-options -gv allow-passthrough` 探测这个开关真实状态，**开了才信任 OSC 能穿透到外层终端**（比如 SSH 到服务器、外层用 iTerm2/kitty，passthrough 打开后 OSC 777 真的能弹出本机桌面通知）；没开就完全跳过 OSC，改用两个 tmux 原生、不需要客户端终端支持任何协议的信道：
+  1. **BEL 字符**（`\x07`）——tmux 的 `monitor-bell`（默认开）会在状态栏给发出 bell 的那个 window 打标，哪怕你在另一个 window 也看得到该去哪找。
+  2. **`tmux display-message`**——在状态栏弹一条临时消息，不需要切 window 就能看到内容预览。
+
+推荐往 `~/.tmux.conf` 加这几行（不是 Forge 强制的，是让上面这套机制发挥最大效果）：
+
+```tmux
+set -g monitor-bell on        # tmux 默认就是 on，写出来只是显式化
+set -g allow-passthrough on   # 想要 OSC 777 真的弹桌面通知穿透 tmux，才需要开这个
+```
+
+三层通知现在分工很清楚，覆盖"人在哪"的三种情况：
+1. **ntfy**（§9.4）——人不在电脑前，靠手机推送，跟终端/tmux 完全无关。
+2. **OSC passthrough**（这轮加固）——人在电脑前，tmux 配了 `allow-passthrough`，能拿到真正的桌面通知。
+3. **tmux bell + display-message**（这轮新增）——人在电脑前但在另一个 tmux window，没配 passthrough 也有兜底，零客户端配置要求。
+
+### 9.6 footer 改回纯文字：先列字段清单，再让你选
+
+§9.4 给 footer 加了方块进度条（`renderContextBar`），你反馈"不想搞得花里胡哨，以文字为主，竖线分割，颜色为辅"——这条反馈直接推翻了 §9.4 那处改动，记下来是为了不让以后的自己重复踩"加装饰性效果"这个已经被否决的方向。
+
+做法上没有直接改，而是先把 pi 能拿到的字段（累计 token、cache 读写/命中率、cost、context 占用+上限、pwd、branch、session name、model id、provider、thinking level、其它 extension 状态行）列成清单给你选，你确认要哪些之后才写代码——这是"先出选项再实现"，不是"先实现再等反馈改"，对这种纯偏好性的 UI 决定成本更低。
+
+选定的字段和取舍：
+
+| 字段 | 要/不要 | 备注 |
+| --- | --- | --- |
+| 累计 token（↑/↓） | 要 | 原有 |
+| cache 命中率 | 要 | 只要 CH%，不要 R/W 原始读写数——判断依据是"命中率是决策信号，原始读写数是实现细节" |
+| cost | 要 | 原有，阈值变色不变 |
+| context 占用 + 上限 | 要 | 格式 `{percent}%/{window}`，跟 pi 内置 footer 一致，不是原始 token 数 |
+| 自动压缩标记 | 要 | `(auto)`，见下面的诚实声明 |
+| pwd / branch / session name | 要，有则显示无则不显示 | 挪到独立的第一行（identity），跟第二行（stats）分开 |
+| model id | 要 | 原有 |
+| thinking level | 要 | 只在模型支持 reasoning 时显示 |
+| provider 名 | 不要 | 单 provider 场景是废信息，没问就不主动加 |
+| 其它 extension 状态行（如 plan-mode 进度） | 暂不处理 | 提了一句风险——custom-footer 接管了 `ctx.ui.setFooter()`，pi 原生 footer 用来显示这行的机制可能被吞掉，还没验证，先不处理，等实际用到 `/plan` 时再看 |
+
+布局上从 upstream 的单行改成两行：第一行 identity（cwd/branch/session name），第二行 stats（token/cache/cost/context/model/thinking）。理由：字段选下来一行装不下，与其靠 `truncateToWidth` 硬截断成谁也看不全的样子，不如学 pi 自己内置 footer 本来就是两行的做法——这是这几轮里第三次遇到"pi 自己已经这么做了，抄它的比自己发明的更可靠"的情况（context 阈值、chain/parallel 的 subagent 机制、这次的两行布局），值得记下来当一条经验：改 UI 细节前先看 pi 自己的内置实现怎么处理同一个问题。
+
+**一处诚实声明**：`(auto)` 这个标记目前是**恒定显示**的，不是真的在读一个开关状态。pi 内置 footer 的同名字段读的是 pi 核心自己的 auto-compact 开关（`autoCompactEnabled`，由 interactive-mode 内部设置，extension 拿不到）；咱们这个 `(auto)` 实际读的是"`trigger-compact.ts` 这个 vendored extension 有没有装"——因为它目前没有开关，只要装了就是恒定生效，所以标记恒定显示。不是假信息（确实反映了"这个机制被接上了"），但也不是一个真正会变化的状态位。以后如果给 `trigger-compact.ts` 加开关命令，这个标记才会开始真正有信息量，先如实记下这个局限，不装作它已经是动态的。
+
+### 9.7 竖线只标"大栏目"边界，不是逐字段分隔——参照 Claude Code 官方 statusline 约定重新分组
+
+§9.6 定完字段清单之后的下一轮反馈：竖线用得太密了，逐字段分隔视觉上太碎，应该只在真正不同的"大栏目"之间用，同一栏目内部（比如 token 数、cache 命中率、cost 这几个都属于"用量"）不需要竖线，空格分开就够。同时要求把 identity（路径/分支）固定在上面一行，把 model 相关信息（model id、thinking level）挪到下面一行的右侧。
+
+动手之前按你说的去查了 Claude Code 自己的 statusline 文档和示例（`code.claude.com/docs/en/statusline`）——这是"参照官方 API 怎么做"的具体依据，不是凭感觉调整：
+
+- 官方单行示例：`[$MODEL] 📁 ${DIR##*/} | ${PCT}% context`——model+目录是一组，context 百分比是另一组，中间正好一根竖线。跟"竖线只标大栏目边界"的判断吻合。
+- 官方多行示例（`statusline-multiline.png`）：第一行 `[MODEL] 📁 dir | 🌿 branch`，第二行 `BAR pct% | $cost | ⏱ duration`——第二行内部其实每个字段都用了竖线，跟你这轮"用量字段之间不要竖线"的要求不完全一样。这里明确按你的原话来，不照抄官方第二行的分隔密度——官方文档提供的是"两行布局 + 竖线做大栏目边界"这个大结构的验证，不是要逐字段照搬。
+
+落地成这样：
+
+```
+~/workspace/forge on feature-x payment-retry
+↑12.3k ↓4.1k CH67.3% $0.842 71%/200k (auto)  |  claude-sonnet-5 thinking: medium
+```
+
+- 第一行：identity，cwd + branch + session name，空格分隔，没有竖线。
+- 第二行：**只有一根竖线**，隔开两个大栏目——左边"用量"（token/cache/cost/context，内部空格分隔），右边"model"（model id/thinking level，内部空格分隔）。
+
+`bucketSep` 这个变量名和注释里直接写死了"只用在两个 bucket 之间，bucket 内部不用"，就是为了不让以后改动时把竖线加回字段之间——这条规则从这轮反馈来看已经反复被推翻过一次（§9.6 先是逐字段加竖线，这轮再改成只在大栏目边界加），值得在代码里而不只是文档里把约束钉死。
+
+---
+
+### 9.8 照着截图对样式：改回单行，颜色分类
+
+你放了一张截图在仓库根目录（`Snipaste_2026-08-12_20-30-25.png`，另一个工具的 statusline），要求"这种风格，但字段按刚才说的来"。截图里的样式：单行，左边路径+分支（分支加粗、颜色突出），右边整块靠右对齐，model 名 + context 用量（绿色）+ 竖线 + cost（橙色）+ 竖线 + 用时/时钟。
+
+这跟 §9.6/§9.7 刚定下的两行布局是矛盾的，直接照单收下会跟之前口头定的"token/cost/cache 之间不要竖线"打架（截图里 cost 前面明明有一根竖线）。处理方式是拆开看：**截图给的是排版和配色的参照，不是逐字段的竖线规范**——§9.7 已经用官方文档验证过"竖线只标大栏目边界"这条规则，这次继续按这条规则来，只是把"两行"改回"一行"，把"边界"从"line1 vs line2"改成"左 vs 右"。
+
+落地结果（右侧两个栏目的顺序按下一轮反馈调整过——先用量后 model，不是先 model 后用量，见下方"顺序"一条）：
+
+```
+~/workspace/forge on main payment-retry                    ↑12.3k ↓4.1k CH67.3% $0.842 107k/1.0M (11%)  |  claude-sonnet-5 thinking: medium
+```
+
+- 左：cwd + branch（加粗 + accent 色，截图里最显眼的就是这个）+ session name，空格分隔。
+- 右：用量栏目（token/cache/cost/context）**一根竖线** model 栏目（model id、thinking level），栏目内部空格分隔。
+- 两侧用空格 pad 撑到终端宽度，不是竖线——这也是截图本来的样子，也是 upstream 单行版本原来的做法。
+
+三处主动没有照抄截图的地方，都在代码头部注释里写了，这里再解释一遍原因：
+
+1. **context 格式改成 `tokens/window (percent%)`**（例：`107k/1.0M (11%)`），不是之前的 `percent%/window`——这个改了，是真的抄截图，因为这个格式确实比纯百分比更贴"目前的上下文和模型的上限"这句原始需求，属于截图纠正了之前的猜测。
+2. **cost 没有跟着截图变成恒定橙色**——截图里 cost 看起来是恒定色，不随金额变化；但之前定的"$1 以上才变 warning 色"是有信息量的设计（呼应 §7.1"dispatch 花真钱"），恒定色只是好看，没有信息量。保留阈值变色，只在低于阈值时用 dim。这条不确定完全猜对你的意图，如果你其实想要恒定色，说一声就改。
+3. **去掉了 `(auto)` 标记**——§9.6 就已经承认这个标记是恒定显示、没有真实开关状态支撑；这次单行本来空间就更紧，与其继续显示一个没有信息量的静态徽章，不如先去掉，等 `trigger-compact.ts` 真的有开关命令了再加回来。
+
+context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色）——这个改动截图也确实是绿色，但独立于截图也站得住：低于阈值 = 健康状态，用绿色比 dim 更符合"红黄绿"三色阶梯的直觉，warning/error 两档已经在用了，success 补上低位阶正好凑齐三阶。
+
+**顺序**：上面截图初版实现是"model 栏目 | 用量栏目"，跟着截图里 model 名在最前的顺序走的。下一轮反馈明确要倒过来——"token 相关的信息放在前面，model 的信息放在后面"，已经改成"用量栏目 | model 栏目"。这条直接照最新的原话来，不再猜。
+
+### 9.9 去掉 thinking level，model 栏目末尾加时长 + 时钟
+
+反馈："think 信息不需要显示了，最后显示一个时间啥的"——两个改动：model 栏目里的 `thinking: <level>` 删掉；末尾加时间。截图（§9.8）原本就有这个位置（`1h19m 12:30`），之前落地时没跟进这部分，这轮补上。
+
+- **时长**：从这个 footer 组件被创建的时刻算起（`sessionStartedAt = Date.now()`，格式 `1h19m` / `23m` / `45s`，按最大单位裁）。**如实声明一个局限**：pi 没有给 extension 暴露"session 真实创建时间"这个字段，所以这个时长在**断线重连/resume 一个老 session** 的场景下，算的是"这个 footer 组件这次开始渲染以来过了多久"，不是这个 session 从第一次创建到现在的真实年龄。日常"这轮对话开了多久"的场景够用，跨会话续接的场景下数字会看着偏小，先如实记这个限制。
+- **时钟**：`HH:MM`，24 小时制，本地时区。
+- **保活**：之前 footer 只在 `footerData.onBranchChange()` 触发时重新渲染（换分支才更新），时钟/时长这种随时间自然变化的字段光靠这个会经常显得"卡住不动"（人不操作、不换分支的时候，界面会一直显示旧数字）。加了一个 30 秒的 `setInterval` 主动触发重渲染，并且在 `dispose()`（原来只清理 `onBranchChange` 的订阅）里一并 `clearInterval`，不留定时器泄漏。
+
+### 9.10 推翻重来：仪表盘思路，只留两个真正会看的东西
+
+反馈："感觉还是不太行……整体的 footer 只保留最核心最关键的信息，就像车的仪表板一样"，并点名 model 信息（"没啥用"）和 cost 信息都要去掉。
+
+这不是又一次"删一两个字段"的小调整——是对 §9.4 到 §9.9 整个方向的推翻。回头看，这几轮的问题是每次反馈都是"这个不对"→改一处→下一轮又"这个也不对"，一直在同一个"信息越全越好，只是排版/配色需要调"的框架里打转，没有人问过"这些信息里到底哪些是真正会看的"。这轮反馈提供的是一个新框架，不是新参数：**仪表盘只放开车时真正会瞟一眼的东西（时速、油量），不是行车电脑那种十几个数字的详情页**。
+
+对照下来，之前攒的字段里，只有一个是"仪表盘"级别的：**context window 占用**——这是唯一一个真正 actionable 的数字，它直接预示什么时候会触发 compact，跟"油量表快见底了该找加油站"是同一种信息。其余全部砍掉：
+
+| 字段 | 处理 | 为什么够格/不够格 |
+| --- | --- | --- |
+| context 占用（tokens/window + percent，颜色三阶） | **留** | 唯一 actionable 的数字，预示 compact 触发时机 |
+| cwd + branch + session name | **留** | "我在哪"，仪表盘上等价于挡位/导航，不是可选信息 |
+| model id | 砍 | 反馈原话"没啥用"——切换频率低，真要查有 `/model` 命令，不需要常驻 |
+| cost | 砍 | 反馈明确要求去掉；花费重要，但不是"开车时"要看的，更像行车电脑里的油耗统计 |
+| 累计 token（↑/↓）、cache 命中率 | 砍 | 诊断信息，不是决策信息——用不着知道具体数字，只需要知道"快满了没有"（这就是保留的 context 占用在做的事） |
+| session 时长 + 时钟 | 砍 | §9.9 刚加的，这轮直接一起砍——车上确实有钟，但这轮反馈的重点是"整体只留核心"，不是"留下已经加的东西"，宁可先砍到最小，需要再加回来 |
+
+代码也跟着大幅精简：`COST_WARN_THRESHOLD`、`formatDuration`/`formatClock`、`sessionStartedAt`、`CLOCK_REFRESH_MS`/`setInterval`、cache 命中率的遍历统计——全部删掉，`render()` 从统计一整个 session 的累计用量，变成只读一次 `ctx.getContextUsage()`。文件行数从 ~210 行降到 ~110 行。
+
+落地结果：
+
+```
+~/workspace/forge on main payment-retry                                    107k/1.0M (11%)
+```
+
+右边只有一个数字，不再需要"栏目"和竖线规则——§9.7 定的"竖线只标大栏目边界"这条规则现在没有用武之地了（只剩一个栏目），不是被推翻，是这次的场景用不上，以后如果核心信息又长回两类以上，这条规则还在，直接复用。
+
+---
+
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。
