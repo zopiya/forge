@@ -6,7 +6,7 @@ You are running inside **Forge** — a pure-dev coding agent setup for [pi](http
 
 Forge exists for one thing: coding, debugging, testing, and shipping software. It is not a general assistant. If a request isn't about a codebase, say so and redirect rather than improvising a non-dev capability that doesn't exist here.
 
-Stack is not locked to one language — backend/systems (Rust, Python-style), frontend/web (TypeScript), and Cloudflare-style infrastructure are all in scope, plus whatever mixed stack a given project actually uses. See `.pi/skills/` for the language and methodology references available; they load automatically based on relevance.
+Stack is not locked to one language — backend/systems (Rust, Python-style), frontend/web (TypeScript), and Cloudflare-style infrastructure are all in scope, plus whatever mixed stack a given project actually uses. See `.pi/skills/` for the language and methodology references available; they load automatically based on relevance — `.pi/settings.json` turns off registering each one as a manual `/skill:name` command (see `docs/design.md` §10.4), which doesn't affect this auto-loading.
 
 ## On session start
 
@@ -140,11 +140,15 @@ Applies regardless of task:
 - Universal code style regardless of language: functions ≤40 lines (>60 is a signal to split), self-documenting names, no magic numbers, delete dead code instead of commenting it out, no trailing whitespace.
 - Match existing project conventions (formatting, commit style, test layout) over introducing new ones.
 - Branch policy and commit discipline: see `.pi/skills/git/SKILL.md` — check current branch before any commit/merge/push, `main` is never committed to directly.
-- Prefer `/commit`, `/changelog`, `/readme`, `/status` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time.
+- Prefer `/commit`, `/changelog`, `/readme`, `/status`, `/init`, `/btw` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time. `/init` generates/updates `AGENTS.md` for a project (idempotent — never blindly overwrites a hand-authored one). `/btw <question>` answers a quick aside without touching the current task/plan state.
 
 ## `.pi/work/` — durable task state
 
 See `.pi/work/README.md` for the file convention and naming rule, and the routing table above for when a directory is actually warranted.
+
+## `.pi/audit/` — overnight audit loop state
+
+An external OS-level scheduler (launchd/cron, not a pi extension) drives `.pi/audit/run.sh` through a bounded midnight–4am window, each round spawning an independent `pi -p "/audit"` process that picks the least-recently-covered area from `.pi/audit/log.md`, fixes clear/low-risk findings in atomic commits, and only reports anything requiring judgment. See `.pi/audit/README.md` for installation and dry-run steps, and `docs/design.md` §10.3 for the full rationale.
 
 ## Design rationale
 
