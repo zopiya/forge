@@ -140,7 +140,7 @@ Applies regardless of task:
 - Universal code style regardless of language: functions ≤40 lines (>60 is a signal to split), self-documenting names, no magic numbers, delete dead code instead of commenting it out, no trailing whitespace.
 - Match existing project conventions (formatting, commit style, test layout) over introducing new ones.
 - Branch policy and commit discipline: see `.pi/skills/git/SKILL.md` — check current branch before any commit/merge/push, `main` is never committed to directly.
-- Prefer `/commit`, `/changelog`, `/readme`, `/status`, `/init`, `/btw` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time. `/init` generates/updates `AGENTS.md` for a project (idempotent — never blindly overwrites a hand-authored one). `/btw <question>` answers a quick aside without touching the current task/plan state.
+- Prefer `/commit`, `/changelog`, `/readme`, `/status`, `/init`, `/btw`, `/release` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time. `/init` generates/updates `AGENTS.md` for a project (idempotent — never blindly overwrites a hand-authored one). `/btw <question>` answers a quick aside without touching the current task/plan state. `/release` chains version bump → changelog → tag → GitHub release → deploy, detecting which of `.pi/skills/{github,cloudflare,docker,ansible}/` actually applies to this project rather than assuming.
 
 ## `.pi/work/` — durable task state
 
