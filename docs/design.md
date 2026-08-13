@@ -570,4 +570,16 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 ---
 
+## 10. `/release` —— 把版本发布串成一条命令，探测部署方式而不是假设
+
+加完 `github`/`cloudflare`/`docker`/`ansible` 四个 skill 之后，它们都还只是"参考资料"，没有一个命令把它们串起来用。`/release`（`.pi/prompts/release.md`）补这个缺口：前置检查（工作区干净、分支对、测试过）→ 定版本号（显式参数 / patch|minor|major / 从 commit 历史按 conventional commits 推断，推断出来的一定先展示再继续，不静默应用）→ 走一遍 `/changelog` 的分类逻辑生成条目 → 提交版本号+changelog → 打 tag → push + `gh release create` → 部署。
+
+部署这一步是探测式的，不是假设某一种技术栈：有 `wrangler.toml`/`.jsonc` 就是 Cloudflare 项目，有 `Dockerfile`/`docker-compose.yml` 就是 Docker，有引用 `hosts:` 的 playbook 就是 Ansible，什么都没有就是纯库/包发布，到 GitHub release 那步就停——不给一个没有部署形态的项目硬造一个部署步骤。
+
+`gh release create`/`wrangler deploy`/真正的 push 这几步之前都要求先确认——版本号推断、改 changelog、本地打 tag 这些在推送之前都是本地、可撤销的，一旦 push/deploy 就是对外的了，这条线正好对应 `.pi/skills/*/SKILL.md` 里反复出现的"安全规则"小节的分界线。
+
+同时是纯 prompt template，没有写 extension——跟 `/init`/`/btw`/`/audit` 一样的判断：这是一套按顺序读文件、跑命令、问确认的流程，不需要状态管理或工具级拦截，prompt template 够用。
+
+---
+
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。
