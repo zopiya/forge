@@ -570,4 +570,81 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 ---
 
+## 10. v1 之后新增：`/init`、`/btw`、夜间审计循环
+
+三个新能力同一批需求确认后落地，延续第 9 节"只吸收判断标准，不是照单全收"：能用 prompt template 解决的不写 extension 代码；需要外部调度的能力不塞进 extension（见 §10.3）。
+
+### 10.1 `/init` —— 生成/更新 AGENTS.md，绝不覆盖已手写的文件
+
+同 `/readme`/`/status` 一样是纯 prompt template（`.pi/prompts/init.md`），不需要 extension 代码。核心约束是幂等/非破坏性：AGENTS.md 一旦存在就是手写的、经过设计的文件（Forge 自己这份就是逐决策记在本文档里的），`/init` 检测到已存在就只提"缺了什么、加在哪"的具体建议，问过再写，绝不整体重写或静默覆盖；只有全新项目（没有 AGENTS.md）才走"从头生成"这条路径——这也是这个命令的主要使用场景：把 Forge 方法论带到一个新项目。
+
+### 10.2 `/btw` —— 顺带一问，不进入任务/plan 状态
+
+同样是纯 prompt template（`.pi/prompts/btw.md`），不需要状态文件（已确认不需要持久化）。核心行为：简短回答，然后原样回到当前任务/plan，不碰 `.pi/work/`、todo、plan mode 状态——这个问题本身不算主任务的进展，也不是新任务。
+
+### 10.3 夜间审计循环 —— 外部调度 + `pi -p` 一次性子进程，不是 extension 定时器
+
+**为什么不用 extension 定时器**：pi 官方 extension 文档明确警告，不要在 extension factory 里启动后台资源（进程/socket/文件监听/定时器）；Forge 本来就没有任何调度原语。做法直接对齐已有的 `subagent` dispatch 模型——外部反复调用 `pi -p "..."` 起独立一次性进程，不是单个 session 里的常驻循环。调度本身（00:00–04:00 窗口、轮数上限）完全交给外部 OS 调度器（launchd 为主，crontab 作为备选说明），pi/extension 层不参与调度决策。
+
+**`notify.ts` 决策：选"外部 wrapper 直接 curl ntfy.sh"，notify.ts 本身不改动一行**。理由：
+1. `ctx.hasUI` 的整体门控是 §9.13 靠真实复现（OSC 字节混进 dispatch 的 JSON 流）修的一个具体缺陷，不是猜测性加固——为一个新场景重新打开这段推理，即便是 opt-in，也是在复用一个"已经验证过对"的边界上引入新的判断分支，回归风险不对称地大于收益。
+2. 新查证的一点：pi 的 extension 文档里 `ctx.mode`/`ctx.hasUI` 对照表显示，`--mode json`（subagent dispatch）和 `-p`（审计循环用的正是这个）的 `ctx.hasUI` **都是 `false`**——notify.ts 现在的门控不是"专门针对 subagent 场景碰巧也拦住了审计循环"，而是一条通用规则"没有 UI 就不通知"，对两种 headless 调用形状都是对的。要区分"因为被 subagent dispatch 而 headless"和"因为被计划任务 `pi -p` 独立跑而 headless"，这个区分在 notify.ts 内部并不天然存在，容易和 §9.13 已经修好的边界纠缠出新的边角情况。
+3. wrapper 脚本（`.pi/audit/run.sh`）本来就有更适合当作通知内容的材料——退出码、这一轮审计的区域（读 `log.md` 最新条目）、是否有新提交、耗时——比 notify.ts 通用的"最后一条 assistant 消息预览"更有用，不存在"通过修 notify.ts 换来更好的通知"这个交换。
+4. 唯一代价是通知逻辑分两处（TS extension + shell 脚本），可接受——wrapper 里的 `ntfy()` 函数只有十来行 curl，不是新的判断逻辑，跟 notify.ts 里 `notifyNtfy()` 复用同一对环境变量 `PI_NTFY_TOPIC`/`PI_NTFY_SERVER`，行为上是一致的，只是调用点不同。
+
+**轮换/状态机制**：`.pi/audit/log.md`，每轮 `/audit` 追加一条（日期、区域、修了什么、报告了什么），下一轮读它挑"最久没覆盖"的区域。选它而不是手工维护的队列文件：零配置，代码库结构变化时自动跟着调整（目录改名/新增不需要手动同步队列）；代价是"子系统边界"每轮都靠模型现推断，不如固定队列确定，但审计本来就是维护性质的重复劳动，不追求逐轮完全一致。
+
+**自动修复的可复审策略**：`/audit` 模板要求把每个发现分两类——lint 级/死代码/明显错误/文档与代码矛盾这类"低风险、明确"的直接改并原子提交（一个 commit 一个修复，conventional commit 格式）；涉及行为/接口变更或任何拿不准的一律只报告、不动。要求收工前 `git status --porcelain` 必须为空，wrapper 脚本在每轮后也做同样的检查，不干净就整晚停止（fail closed）——不是因为不信任模型的判断，是因为"叠加在不确定状态上继续自动改"这件事本身风险不对称。全部提交落在独立的 `chore/nightly-audit-<date>` 分支上，不自动合并、不自动推送，早上人工 review 之后再决定要不要合并。
+
+**时长/轮数上限**：`.pi/audit/run.sh` 里双重强制——`AUDIT_END_TIME`（默认 04:00，每轮开始前重新判断一次）和 `AUDIT_MAX_ROUNDS`（默认 7，与时间判断相互独立，任一个先触发都停）；再加一个每轮的 `AUDIT_ROUND_TIMEOUT_SECONDS`（默认 1500 秒）防单轮卡死拖垮整晚，以及一个 `.pi/audit/STOP` 哨兵文件作为人工紧急刹车。全部在外部脚本里，pi/extension 层不参与——这是"调度和上限都是外部机制的事"这个决定的直接体现。
+
+**一个查证到的坑**：非交互模式（`-p`/`--mode json`/`--mode rpc`）不弹信任提示，`defaultProjectTrust` 是默认值 `"ask"`（或 `"never"`）时会直接**忽略**项目资源——也就是说没有一条已保存的信任记录时，`.pi/prompts/audit.md` 本身可能加载不到，整轮审计静默退化成对着一句字面上的 `/audit` 文本瞎聊。`run.sh` 因此显式带 `--approve`，不依赖 `~/.pi/agent/trust.json` 里可能存在也可能不存在的已保存信任决定。
+
+**另一个查证到的坑（连带发现，范围外，先记录）**：Forge 现有的 `.pi/prompts/readme.md`/`commit.md`/`changelog.md` 用的 `{{arg}}` 占位符，pi 的模板替换（`substituteArgs()`，只认 `$1`/`$@`/`$ARGUMENTS`/`${1:-default}`）根本不认识这个语法——用户在 `/readme foo` 里键入的 `foo` 从来没有被替换进模板，模型看到的是字面的 `{{focus}}`。新增的 `/init`/`/btw`/`/audit` 三个模板改用真正生效的 `$1`/`$ARGUMENTS`，但这个发现本身不属于这次三个功能的范围，没有顺手改掉那三个既有文件——按"只做请求范围内的事"处理，留给下次单独修。
+
+### 10.4 `.pi/settings.json` —— 关掉 skill 自动生成的 `/skill:name` 命令
+
+加完 `/init`/`/btw`/`/audit` 之后自然带出一个问题：`/` 自动补全列表已经有二十多条，还会不会继续涨。查证结论：Forge 自己定义的命令（extension 注册的 5 个 + prompt template 的 9 个）不是问题——这是一个小规模、每次新增都是用户主动确认过要留的集合，增长很慢；真正会随时间线性膨胀的是 `.pi/skills/` 里每加一个 skill 就自动多一条的 `/skill:name` 命令（Forge 现在 10 个 skill，就是 10 条）。
+
+按 pi 官方 `skills.md` 的说明，skill 的"按相关性自动加载"和"注册成 `/skill:name` 命令"是两条独立路径：启动时扫描 skill 的 name/description 写进 system prompt，任务匹配时 agent 自己用 `read` 加载对应 `SKILL.md`（`/skill:name` 只是"强制立刻加载"的手动快捷方式，不是自动加载依赖的机制）。所以关掉 `enableSkillCommands` 只是去掉了那条没人会手动打的命令入口，不影响 skill 本身按需自动加载的能力——新建 `.pi/settings.json`：
+
+```json
+{
+  "enableSkillCommands": false
+}
+```
+
+明确**不**在这次一并调整 `hideThinkingBlock`（隐藏 thinking block 显示）——虽然文档上确认这个开关只影响终端显示、不影响 `defaultThinkingLevel` 也就是推理深度，但保留默认可见更符合"需要看到它在想什么"的日常使用习惯，先不动，之后如果确实觉得吵可以单独再开。
+
+### 10.5 把夜间审计的循环机制拆成通用引擎 `.pi/scripts/pi-loop.sh`
+
+10.3 落地之后你提了一个更通用的需求：外部反复调用 `pi -p "..."` 这套"断点 + while 循环"的机制，不应该只服务于"审计"这一个场景——目标应该是可替换的，只要换一个 prompt，就能让 pi 朝任何一个长期目标不断被重新激活去尝试，循环骨架本身复用。原来 §10.3 写的 `run.sh` 把审计逻辑（建分支、脏树检查）和循环机制（时间窗口、轮数上限、STOP、通知）糅在一个文件里，不满足这个要求。
+
+**拆分方式**：新增 `.pi/scripts/pi-loop.sh`，对"目标是什么"零知情——不认识 git，不认识"审计"，只认识"prompt + 断点条件"。它的职责严格限定在：读一个 `--prompt`/`--prompt-file`，反复 `pi --approve -p "<prompt>"`，直到 `--until`/`--duration`/`--max-rounds`（至少给一个，否则拒绝启动——不支持无界循环）或 STOP 文件触发停止；每轮记日志、可选 ntfy 推送。目标相关的判断力通过两个通用钩子注入，而不是让引擎认识目标领域：
+
+- `--precheck CMD`：开始前跑一次，非零退出直接拒绝启动。
+- `--post-round-check CMD`：每轮跑完之后跑一次，非零退出整晚 fail closed 停止。
+
+两个钩子都只是"跑一个 shell 命令、看退出码"，引擎完全不解释命令内容——`.pi/audit/run.sh` 拿它们传 `[ -z "$(git status --porcelain)" ]` 做脏树检查，换一个目标就可以传完全不相关的检查，引擎代码不用改一行。
+
+**`.pi/audit/run.sh` 重构**：不再自己起 while 循环，改成薄封装——建/切 `chore/nightly-audit-<date>` 分支、把 `AUDIT_END_TIME`/`AUDIT_MAX_ROUNDS`/`AUDIT_ROUND_TIMEOUT_SECONDS`/`AUDIT_MIN_GAP_SECONDS` 这几个既有环境变量原样转发成 `pi-loop.sh` 的 `--until`/`--max-rounds`/`--round-timeout`/`--interval`，脏树检查通过 `--precheck`/`--post-round-check` 挂进去，循环结束后自己算 commit 总数发一条更详细的收尾通知。对外接口（环境变量、`.pi/audit/README.md` 里的 dry-run 步骤）完全没变，只是内部不再自己维护 while 循环。
+
+**测试方式**：这两个脚本没有官方测试框架可用，跟 §9.13 的方法一致——真的跑，不是纸面审查。用一个假的 `pi`（shell 函数，只 echo 参数、`exit 0`）替换 PATH 里的真实 `pi`，在 `/private/tmp` 的临时目录/临时 git 仓库里跑了：`--max-rounds` 正常停止、`--precheck` 失败时拒绝启动（且不跑任何一轮）、`--post-round-check` 失败时跑完当前这轮再 fail closed 停止、STOP 文件在运行中出现时跑完当前轮就退出、`run.sh` 实际用的那句待转义的 `--precheck`/`--post-round-check` 字符串在真实嵌套引号下确实按预期展开成 `bash -c` 能执行的命令。过程中真的抓到两个 bug，都是在这轮测试里发现并修的，不是靠读代码猜的：
+1. `--post-round-check` 触发的 fail-closed 分支，最终汇总行把已经跑完的轮数少算了 1 轮（沿用了"提前于 round 递增退出"那几个分支的 `round - 1` 算法，但这个分支是round 递增后已经真正跑完一轮才退出的）——改成一个独立的 `rounds_completed` 计数器，在每轮真正跑完后才自增，所有退出路径统一读这个变量。
+2. 没传 `--duration` 时启动日志把默认值和单位字符串直接拼接，显示成 `duration=nones`——改成显式判断，未设置时显示 `none`，设置了才拼 `s` 单位。
+
+以后如果要让 pi 朝别的目标（不是审计）持续尝试，直接写一个新 prompt，调 `.pi/scripts/pi-loop.sh --prompt "..." --until/--duration/--max-rounds ...` 即可，不需要再写一次 while 循环。
+
+### 10.6 补上 `project-layout` 引用的空头支票 + 让 `/init` 真的去建骨架
+
+`project-layout` skill（§10.4 之外新加的，见 `feat/project-layout-skill` 分支）写了"具体语言的目录习惯参考 `typescript`/`python`/`rust` 三个 skill"，但实际打开这三个文件检查后发现里面完全没有目录布局相关内容——全是类型系统/错误处理/工具链命令。这是一个真实查出来的缺口，不是假设：一个 skill 引用另一个 skill 却没兑现，比没有这个引用更糟——会让人以为查过了。
+
+修法：给 `typescript`/`python`/`rust` 三个 skill 各加一个 `## Layout` 小节，内容是该生态的标准目录骨架（TS 的 `src/index.ts` + feature-first 组织、Python 的 `src/<package>/` layout 取舍、Rust 由 Cargo 本身规定的 `src/main.rs`/`src/lib.rs`/`tests/`/`benches/` 约定），每个都回指 `project-layout` 讲跨语言的通用纪律。
+
+同时 `/init` 之前只在"从头生成"路径里写一个 `AGENTS.md`，目录该怎么摆完全是纸面知识，从来没有被执行过。补了 Step 2 的第 0 步：如果仓库确实是空的/近乎空的（没有真实源码，最多一个 README/LICENSE），先确认项目类型/技术栈（用 `questionnaire` 工具问，不瞎猜），照 `project-layout` + 对应语言 skill 的 Layout 小节把初始骨架建出来、确认后再落地，然后才继续生成 `AGENTS.md`。如果仓库已经有真实源码结构，这一步直接跳过——不对着别人已有的组织方式强行套一个新形状。
+
+这次顺带把 `project-layout` skill 合并进了 `feat/pi-commands-and-settings` 分支（而不是继续留在自己独立的 `feat/project-layout-skill` 分支）——因为 `/init` 依赖它，两个继续分开会导致谁先合并、谁先测都测不出真实效果。
+
+---
+
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。
