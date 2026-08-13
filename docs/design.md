@@ -616,6 +616,25 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 明确**不**在这次一并调整 `hideThinkingBlock`（隐藏 thinking block 显示）——虽然文档上确认这个开关只影响终端显示、不影响 `defaultThinkingLevel` 也就是推理深度，但保留默认可见更符合"需要看到它在想什么"的日常使用习惯，先不动，之后如果确实觉得吵可以单独再开。
 
+### 10.5 把夜间审计的循环机制拆成通用引擎 `.pi/scripts/pi-loop.sh`
+
+10.3 落地之后你提了一个更通用的需求：外部反复调用 `pi -p "..."` 这套"断点 + while 循环"的机制，不应该只服务于"审计"这一个场景——目标应该是可替换的，只要换一个 prompt，就能让 pi 朝任何一个长期目标不断被重新激活去尝试，循环骨架本身复用。原来 §10.3 写的 `run.sh` 把审计逻辑（建分支、脏树检查）和循环机制（时间窗口、轮数上限、STOP、通知）糅在一个文件里，不满足这个要求。
+
+**拆分方式**：新增 `.pi/scripts/pi-loop.sh`，对"目标是什么"零知情——不认识 git，不认识"审计"，只认识"prompt + 断点条件"。它的职责严格限定在：读一个 `--prompt`/`--prompt-file`，反复 `pi --approve -p "<prompt>"`，直到 `--until`/`--duration`/`--max-rounds`（至少给一个，否则拒绝启动——不支持无界循环）或 STOP 文件触发停止；每轮记日志、可选 ntfy 推送。目标相关的判断力通过两个通用钩子注入，而不是让引擎认识目标领域：
+
+- `--precheck CMD`：开始前跑一次，非零退出直接拒绝启动。
+- `--post-round-check CMD`：每轮跑完之后跑一次，非零退出整晚 fail closed 停止。
+
+两个钩子都只是"跑一个 shell 命令、看退出码"，引擎完全不解释命令内容——`.pi/audit/run.sh` 拿它们传 `[ -z "$(git status --porcelain)" ]` 做脏树检查，换一个目标就可以传完全不相关的检查，引擎代码不用改一行。
+
+**`.pi/audit/run.sh` 重构**：不再自己起 while 循环，改成薄封装——建/切 `chore/nightly-audit-<date>` 分支、把 `AUDIT_END_TIME`/`AUDIT_MAX_ROUNDS`/`AUDIT_ROUND_TIMEOUT_SECONDS`/`AUDIT_MIN_GAP_SECONDS` 这几个既有环境变量原样转发成 `pi-loop.sh` 的 `--until`/`--max-rounds`/`--round-timeout`/`--interval`，脏树检查通过 `--precheck`/`--post-round-check` 挂进去，循环结束后自己算 commit 总数发一条更详细的收尾通知。对外接口（环境变量、`.pi/audit/README.md` 里的 dry-run 步骤）完全没变，只是内部不再自己维护 while 循环。
+
+**测试方式**：这两个脚本没有官方测试框架可用，跟 §9.13 的方法一致——真的跑，不是纸面审查。用一个假的 `pi`（shell 函数，只 echo 参数、`exit 0`）替换 PATH 里的真实 `pi`，在 `/private/tmp` 的临时目录/临时 git 仓库里跑了：`--max-rounds` 正常停止、`--precheck` 失败时拒绝启动（且不跑任何一轮）、`--post-round-check` 失败时跑完当前这轮再 fail closed 停止、STOP 文件在运行中出现时跑完当前轮就退出、`run.sh` 实际用的那句待转义的 `--precheck`/`--post-round-check` 字符串在真实嵌套引号下确实按预期展开成 `bash -c` 能执行的命令。过程中真的抓到两个 bug，都是在这轮测试里发现并修的，不是靠读代码猜的：
+1. `--post-round-check` 触发的 fail-closed 分支，最终汇总行把已经跑完的轮数少算了 1 轮（沿用了"提前于 round 递增退出"那几个分支的 `round - 1` 算法，但这个分支是round 递增后已经真正跑完一轮才退出的）——改成一个独立的 `rounds_completed` 计数器，在每轮真正跑完后才自增，所有退出路径统一读这个变量。
+2. 没传 `--duration` 时启动日志把默认值和单位字符串直接拼接，显示成 `duration=nones`——改成显式判断，未设置时显示 `none`，设置了才拼 `s` 单位。
+
+以后如果要让 pi 朝别的目标（不是审计）持续尝试，直接写一个新 prompt，调 `.pi/scripts/pi-loop.sh --prompt "..." --until/--duration/--max-rounds ...` 即可，不需要再写一次 while 循环。
+
 ---
 
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。

@@ -3,19 +3,29 @@
 Drives the unattended midnight–4am code-audit loop. No service, no daemon —
 `run.sh` is invoked by an external OS-level scheduler (launchd/cron) and
 spawns one independent, non-interactive `pi -p "/audit"` process per round.
-See `docs/design.md` §10.3 for the full rationale (why external scheduler and
-not an extension timer, the `notify.ts` decision, the rotation mechanism, the
-auto-fix reviewability stance).
+See `docs/design.md` §10.3/§10.5 for the full rationale (why external scheduler
+and not an extension timer, the `notify.ts` decision, the rotation mechanism,
+the auto-fix reviewability stance, why the loop mechanics live in a separate
+generic engine).
+
+`run.sh` itself has no while loop — it's a thin audit-domain wrapper around
+the generic, goal-agnostic loop engine at `.pi/scripts/pi-loop.sh`. It sets up
+the audit-specific state (branch checkout, dirty-tree fail-closed checks via
+`--precheck`/`--post-round-check`) and delegates the actual bounded loop
+(time window, round cap, per-round timeout, STOP file, per-round ntfy) to that
+engine. If you want pi to keep working toward some *other* goal on a
+schedule — not an audit — call `.pi/scripts/pi-loop.sh` directly with a
+different `--prompt`; see that file's header for the full option list.
 
 ## Files
 
 | File | Committed? | Purpose |
 |---|---|---|
-| `run.sh` | Yes | The external driver: time window, round cap, per-round timeout, STOP sentinel, ntfy notifications. |
+| `run.sh` | Yes | Audit-domain wrapper: branch setup, dirty-tree hooks, final summary notification. Delegates the loop itself to `.pi/scripts/pi-loop.sh`. |
 | `log.md` | Yes | Durable rotation log, one entry per round, appended and committed by `.pi/prompts/audit.md` itself. Read at the start of each round to pick the least-recently-audited area. |
 | `README.md` | Yes | This file. |
 | `launchd.example.plist` | Yes | Template for installing `run.sh` as a launchd agent (see below). |
-| `run.log` | No (gitignored, `*.log`) | Plain timestamped operational log from `run.sh` — round starts/stops, exit codes, durations. |
+| `run.log` | No (gitignored, `*.log`) | Plain timestamped operational log — written by `.pi/scripts/pi-loop.sh` (round starts/stops, exit codes, durations) and by `run.sh`'s own branch/dirty-check lines. |
 | `launchd.out.log` / `launchd.err.log` / `cron.log` | No (gitignored, `*.log`) | stdout/stderr capture from whichever scheduler is installed. |
 | `STOP` | No (gitignored explicitly) | Kill-switch — create this file to stop the loop after the current round. Never commit it: a committed `STOP` would permanently disable the loop for anyone who clones the repo. |
 

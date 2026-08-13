@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# .pi/audit/run.sh — external driver for the overnight audit loop.
+# .pi/audit/run.sh — audit-domain wrapper around .pi/scripts/pi-loop.sh.
 #
-# Repeatedly invokes `pi -p "/audit"` as independent, one-shot, non-interactive
-# processes across a bounded time window (default 00:00-04:00), each round
-# picking up wherever `.pi/audit/log.md` left off. Deliberately outside pi:
-# extension factories must not start their own background timers (see
-# extensions.md); this mirrors the existing subagent-dispatch model instead —
-# a real separate `pi` process per unit of work. See docs/design.md §10.3.
+# This file owns everything specific to "unattended overnight code audit":
+# checking out a dedicated branch, refusing to start (or continue) on a
+# dirty working tree, and the human-facing summary notification. The
+# generic loop mechanics (time window, round cap, per-round timeout, STOP
+# sentinel, per-round ntfy) all live in the domain-agnostic
+# .pi/scripts/pi-loop.sh engine — this script has no while loop of its
+# own, it only sets up audit-specific state and hooks into pi-loop.sh via
+# --precheck/--post-round-check. See docs/design.md §10.3/§10.5.
 #
 # Usage:
 #   .pi/audit/run.sh
@@ -21,9 +23,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
 AUDIT_DIR="$REPO_ROOT/.pi/audit"
-LOG_MD="$AUDIT_DIR/log.md"
-RUN_LOG="$AUDIT_DIR/run.log"
 STOP_FILE="$AUDIT_DIR/STOP"
+RUN_LOG="$AUDIT_DIR/run.log"
+PI_LOOP="$REPO_ROOT/.pi/scripts/pi-loop.sh"
 
 AUDIT_END_TIME="${AUDIT_END_TIME:-04:00}"
 AUDIT_MAX_ROUNDS="${AUDIT_MAX_ROUNDS:-7}"
@@ -32,13 +34,13 @@ AUDIT_MIN_GAP_SECONDS="${AUDIT_MIN_GAP_SECONDS:-30}"
 AUDIT_BRANCH="${AUDIT_BRANCH:-chore/nightly-audit-$(date +%Y-%m-%d)}"
 
 mkdir -p "$AUDIT_DIR"
-touch "$LOG_MD" "$RUN_LOG"
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" | tee -a "$RUN_LOG"; }
 
 ntfy() {
-	# Same PI_NTFY_TOPIC/PI_NTFY_SERVER as .pi/extensions/notify.ts, for
-	# consistency - notify.ts itself is NOT modified (docs/design.md §10.3).
+	# Same PI_NTFY_TOPIC/PI_NTFY_SERVER as .pi/extensions/notify.ts and
+	# pi-loop.sh's own pushes, for consistency - notify.ts itself is NOT
+	# modified (docs/design.md §10.3).
 	local title="$1" body="$2"
 	[ -n "${PI_NTFY_TOPIC:-}" ] || return 0
 	local server="${PI_NTFY_SERVER:-https://ntfy.sh}"; server="${server%/}"
@@ -46,32 +48,6 @@ ntfy() {
 	if [[ "$PI_NTFY_TOPIC" == http* ]]; then url="$PI_NTFY_TOPIC"; else url="$server/$PI_NTFY_TOPIC"; fi
 	curl -fsS -X POST "$url" -H "Title: $title" -H "Tags: robot_face" -d "$body" >/dev/null 2>&1 || true
 }
-
-# Portable timeout: macOS ships neither GNU `timeout` nor `gtimeout` by default.
-run_with_timeout() {
-	local seconds="$1"; shift
-	"$@" & local cmd_pid=$!
-	( sleep "$seconds" && kill -TERM "$cmd_pid" 2>/dev/null ) & local watcher_pid=$!
-	local exit_code=0
-	wait "$cmd_pid" 2>/dev/null || exit_code=$?
-	kill "$watcher_pid" 2>/dev/null; wait "$watcher_pid" 2>/dev/null
-	return "$exit_code"
-}
-
-past_end_time() {
-	local now_epoch end_epoch
-	now_epoch="$(date +%s)"
-	end_epoch="$(date -j -f '%H:%M' "$AUDIT_END_TIME" +%s 2>/dev/null)"
-	[ -z "$end_epoch" ] && end_epoch="$(date -d "$AUDIT_END_TIME" +%s 2>/dev/null)"  # GNU date fallback
-	[ -n "$end_epoch" ] && [ "$now_epoch" -ge "$end_epoch" ]
-}
-
-log "=== audit loop starting: branch=$AUDIT_BRANCH end=$AUDIT_END_TIME max_rounds=$AUDIT_MAX_ROUNDS timeout=${AUDIT_ROUND_TIMEOUT_SECONDS}s ==="
-
-if [ -f "$STOP_FILE" ]; then
-	log "STOP file present at start - exiting without running anything."
-	exit 0
-fi
 
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
 	log "ERROR: not a git repository, aborting."
@@ -87,59 +63,31 @@ if [ "$current_branch" != "$AUDIT_BRANCH" ]; then
 	fi
 fi
 
+base_head="$(git rev-parse HEAD)"
+
+log "=== audit loop starting via pi-loop.sh: branch=$AUDIT_BRANCH end=$AUDIT_END_TIME max_rounds=$AUDIT_MAX_ROUNDS timeout=${AUDIT_ROUND_TIMEOUT_SECONDS}s ==="
+
+"$PI_LOOP" \
+	--prompt "/audit" \
+	--until "$AUDIT_END_TIME" \
+	--max-rounds "$AUDIT_MAX_ROUNDS" \
+	--round-timeout "$AUDIT_ROUND_TIMEOUT_SECONDS" \
+	--interval "$AUDIT_MIN_GAP_SECONDS" \
+	--label "audit" \
+	--log "$RUN_LOG" \
+	--stop-file "$STOP_FILE" \
+	--cwd "$REPO_ROOT" \
+	--precheck "cd '$REPO_ROOT' && [ -z \"\$(git status --porcelain)\" ]" \
+	--post-round-check "cd '$REPO_ROOT' && [ -z \"\$(git status --porcelain)\" ]"
+loop_exit=$?
+
+commits_total="$(git rev-list --count "$base_head..HEAD" 2>/dev/null || echo 0)"
+
 if [ -n "$(git status --porcelain)" ]; then
-	log "ERROR: working tree dirty before round 1 - refusing to start."
-	ntfy "Audit loop aborted" "Dirty working tree before round 1 on $AUDIT_BRANCH. Not started."
+	log "=== audit loop finished dirty (see pi-loop's post-round-check failure above) - NOT clean, inspect $AUDIT_BRANCH by hand ==="
+	ntfy "Audit loop finished DIRTY" "Working tree not clean on $AUDIT_BRANCH after the loop stopped. Inspect by hand before doing anything else."
 	exit 1
 fi
 
-round=0
-commits_total=0
-while :; do
-	round=$((round + 1))
-
-	if [ -f "$STOP_FILE" ]; then log "STOP file appeared - stopping after $((round - 1)) round(s)."; break; fi
-	if [ "$round" -gt "$AUDIT_MAX_ROUNDS" ]; then log "Reached AUDIT_MAX_ROUNDS=$AUDIT_MAX_ROUNDS - stopping."; break; fi
-	if past_end_time; then log "Reached AUDIT_END_TIME=$AUDIT_END_TIME - stopping before round $round."; break; fi
-
-	log "--- round $round starting ---"
-	head_before="$(git rev-parse HEAD)"
-	round_start_epoch="$(date +%s)"
-	output_file="$(mktemp "${TMPDIR:-/tmp}/audit-round-XXXXXX.txt")"
-
-	# --approve: non-interactive modes skip the trust prompt and, without a
-	# saved "always" decision, IGNORE .pi/prompts, .pi/extensions, etc under
-	# defaultProjectTrust "ask"/"never" (docs/security.md). Explicit -a makes
-	# this robust to trust.json ever being absent/cleared. See design.md §10.3.
-	run_with_timeout "$AUDIT_ROUND_TIMEOUT_SECONDS" \
-		pi --approve --name "audit-$(date +%Y%m%d-%H%M%S)-r$round" -p "/audit" \
-		>"$output_file" 2>&1
-	round_exit=$?
-
-	round_seconds=$(( $(date +%s) - round_start_epoch ))
-	head_after="$(git rev-parse HEAD)"
-	new_commits=0
-	[ "$head_before" != "$head_after" ] && new_commits="$(git rev-list --count "$head_before..$head_after")"
-	commits_total=$((commits_total + new_commits))
-
-	tail_preview="$(tail -c 400 "$output_file" | tr '\n' ' ')"
-	log "round $round done: exit=$round_exit duration=${round_seconds}s commits=$new_commits"
-
-	if [ -n "$(git status --porcelain)" ]; then
-		log "ERROR: working tree dirty after round $round - stopping the loop (fail closed)."
-		ntfy "Audit round $round left tree dirty - loop stopped" "$tail_preview"
-		break
-	fi
-
-	if [ "$round_exit" -ne 0 ]; then
-		ntfy "Audit round $round failed (exit $round_exit)" "$tail_preview"
-	else
-		ntfy "Audit round $round done - $new_commits commit(s)" "$tail_preview"
-	fi
-
-	rm -f "$output_file"
-	sleep "$AUDIT_MIN_GAP_SECONDS"
-done
-
-log "=== audit loop finished: $((round - 1)) round(s), $commits_total total commit(s) on $AUDIT_BRANCH ==="
-ntfy "Audit loop finished" "$((round - 1)) round(s), $commits_total commit(s) on $AUDIT_BRANCH. Review: git log $AUDIT_BRANCH"
+log "=== audit loop finished: $commits_total total commit(s) on $AUDIT_BRANCH (pi-loop exit $loop_exit) ==="
+ntfy "Audit loop finished" "$commits_total commit(s) on $AUDIT_BRANCH. Review: git log $AUDIT_BRANCH"

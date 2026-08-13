@@ -148,7 +148,7 @@ See `.pi/work/README.md` for the file convention and naming rule, and the routin
 
 ## `.pi/audit/` — overnight audit loop state
 
-An external OS-level scheduler (launchd/cron, not a pi extension) drives `.pi/audit/run.sh` through a bounded midnight–4am window, each round spawning an independent `pi -p "/audit"` process that picks the least-recently-covered area from `.pi/audit/log.md`, fixes clear/low-risk findings in atomic commits, and only reports anything requiring judgment. See `.pi/audit/README.md` for installation and dry-run steps, and `docs/design.md` §10.3 for the full rationale.
+An external OS-level scheduler (launchd/cron, not a pi extension) drives `.pi/audit/run.sh` through a bounded midnight–4am window, each round spawning an independent `pi -p "/audit"` process that picks the least-recently-covered area from `.pi/audit/log.md`, fixes clear/low-risk findings in atomic commits, and only reports anything requiring judgment. `run.sh` is a thin audit-specific wrapper around the generic, goal-agnostic loop engine at `.pi/scripts/pi-loop.sh` — reuse that engine directly (different `--prompt`, same time/round/STOP mechanics) to keep pi working toward any other goal on a schedule, no new while loop needed. See `.pi/audit/README.md` for installation and dry-run steps, and `docs/design.md` §10.3/§10.5 for the full rationale.
 
 ## Design rationale
 
