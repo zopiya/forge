@@ -1,5 +1,6 @@
 ---
 description: Full end-to-end exercise of every Forge mechanism in one session, self-reported pass/fail, for use before/after a real container run or a design change
+argument-hint: "[focus]"
 ---
 
 Run a full end-to-end smoke test of this Forge setup — every phase below, in order. This is a real test, not a dry run: parallel/chain/race dispatches spawn real subprocesses and cost real time/tokens, that's expected. Self-report pass/partial/fail per numbered step with one line of evidence as you go, and be honest about it — a step that half-worked is "partial," not "pass" (see `APPEND_SYSTEM.md`).
@@ -51,4 +52,4 @@ If there's no disposable toy code to act on yet, create a small one now in whate
 
 After this session ends, `/export` it and run `/retro <path-to-export>` in a fresh session to turn any real findings into doc fixes.
 
-Focus: {{focus}}
+Focus: ${1:-none given}

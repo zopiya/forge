@@ -1,8 +1,9 @@
 ---
 description: Generate a CHANGELOG entry from git history in Keep a Changelog format
+argument-hint: "[range or version tag]"
 ---
 
-Generate a CHANGELOG entry following the [Keep a Changelog](https://keepachangelog.com) format for range: {{range}}
+Generate a CHANGELOG entry following the [Keep a Changelog](https://keepachangelog.com) format for range: ${1:-last 50 commits}
 
 1. Run `git log --oneline --no-merges` over the given range (default: last 50 commits if none given), and `git tag --sort=-version:refname | head -5` for context.
 2. Group commits by conventional commit type:
@@ -21,5 +22,5 @@ Generate a CHANGELOG entry following the [Keep a Changelog](https://keepachangel
    ### Changed
    ### Fixed
 
-4. Use `{{range}}` as the version header if it looks like a version tag; otherwise use `[Unreleased]`.
+4. Use the range/tag given above as the version header if it looks like a version tag; otherwise use `[Unreleased]`.
 5. Ask whether to append to `CHANGELOG.md` or just print the entry.

@@ -1,5 +1,6 @@
 ---
 description: Generate and execute a conventional commit from staged changes
+argument-hint: "[scope hint]"
 ---
 
 Create a conventional commit from the currently staged diff.
@@ -13,4 +14,4 @@ Create a conventional commit from the currently staged diff.
 7. Check the diff doesn't contain debug code, commented-out blocks, WIP markers, or secrets — see `.pi/skills/git/SKILL.md`'s Forbidden in Commits.
 8. Show the message and run `git commit -m "..."`.
 
-{{scope}}
+Scope hint from the user, if any (use it to pick the `(scope)` in the subject line, don't invent one if this is empty): ${1:-none given}

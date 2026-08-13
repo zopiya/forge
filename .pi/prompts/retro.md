@@ -1,8 +1,9 @@
 ---
 description: Mine an exported pi session log for real friction points and propose concrete Forge fixes
+argument-hint: "<path-to-export>"
 ---
 
-Read the session export at `{{session}}` — JSONL, one event per line. `message` events carry `role` and `content`; tool calls show up as `tool_use`/`tool_result` blocks inside assistant messages, and `thinking` blocks often narrate the reasoning behind a mistake in the model's own words.
+Read the session export at `$1` — JSONL, one event per line. If no path was given, ask for one rather than guessing which export file is meant. `message` events carry `role` and `content`; tool calls show up as `tool_use`/`tool_result` blocks inside assistant messages, and `thinking` blocks often narrate the reasoning behind a mistake in the model's own words.
 
 1. Scan for friction signals only — don't speculate beyond what's actually in the log:
    - Failed or erroring tool calls (dispatch failures, rejected commits, schema errors)
