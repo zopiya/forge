@@ -141,6 +141,7 @@ Applies regardless of task:
 - Match existing project conventions (formatting, commit style, test layout) over introducing new ones.
 - Branch policy and commit discipline: see `.pi/skills/git/SKILL.md` — check current branch before any commit/merge/push, `main` is never committed to directly.
 - Prefer `/commit`, `/changelog`, `/readme`, `/status` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time.
+- `.github/workflows/lint.yml` typechecks `.pi/extensions/*.ts` (`bun run typecheck` — same command locally), and syntax/shape-checks scripts, JSON, and prompt/skill frontmatter. This is mechanical hygiene, not a substitute for actually running something before calling it done — see `docs/design.md` §10.
 
 ## `.pi/work/` — durable task state
 

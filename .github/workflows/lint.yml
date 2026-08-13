@@ -1,0 +1,67 @@
+name: lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Forge has no automated test framework for extensions/prompts/scripts —
+# validation has always been manual (docs/design.md §9.13/§10.5: read the
+# code, run it once with a fake pi shim or bun -e, note findings in
+# design.md). This workflow automates the cheap, mechanical part of that —
+# typecheck, script syntax, JSON validity, prompt/skill frontmatter shape —
+# so it runs on every change instead of "if whoever's editing remembers to."
+# It is not a substitute for the manual review process those sections
+# describe, just the part that's actually automatable.
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n on every script under .pi/
+        run: |
+          set -uo pipefail
+          fail=0
+          while IFS= read -r -d '' f; do
+            echo "-- $f --"
+            bash -n "$f" || fail=1
+          done < <(find .pi -type f -name "*.sh" -print0)
+          exit "$fail"
+      # ubuntu-latest ships shellcheck preinstalled — no separate action needed.
+      - name: shellcheck on every script under .pi/
+        run: |
+          set -uo pipefail
+          files=$(find .pi -type f -name "*.sh")
+          [ -z "$files" ] && { echo "no .sh files yet"; exit 0; }
+          shellcheck $files
+
+  json:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate every .json under .pi/ and at the repo root
+        run: |
+          set -uo pipefail
+          fail=0
+          while IFS= read -r -d '' f; do
+            echo "-- $f --"
+            python3 -m json.tool "$f" > /dev/null || fail=1
+          done < <(find .pi -type f -name "*.json" -print0; find . -maxdepth 1 -type f -name "*.json" -print0)
+          exit "$fail"
+
+  frontmatter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: .github/scripts/check-frontmatter.sh

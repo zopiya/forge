@@ -570,4 +570,18 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 ---
 
+## 10. `.github/workflows/lint.yml` —— 把手动验证里能自动化的部分自动化
+
+§9.13/§10.5 反复出现同一个模式："这个仓库没有自动化测试框架，验证靠手动跑一遍（`bun -e`、假 `pi` shim、真实跑一次 session）"。这本身没问题——extension/prompt/脚本这些东西确实没有官方测试框架能单元测——但"手动"和"每次改动都真的记得跑"是两件事，后者会随时间衰减。这次加的 CI 只自动化其中机械、无需判断力的那部分，不是要取代 §9.13/§10.5 那套真人验证方法：
+
+- **typecheck**：`.pi/extensions/*.ts` 用 `tsc --noEmit` 过一遍。仓库本来没有 `package.json`（本来就不是要发布的 npm 包），这次新增一个只含 devDependencies 的 `package.json` + `tsconfig.json`，纯粹为了让 `tsc` 能 resolve `@earendil-works/pi-coding-agent` 等包的类型定义——不是要把 Forge 变成一个 npm 项目，`bun.lock` 提交进仓库是为了 CI 安装可复现，本地跑 `bun install && bun run typecheck` 效果一样。这个检查类是能接住真问题的：§9.11/§9.13 里查出来的"用了 `event.input.path` 但实际字段是别的名字"这类字段名不对的 bug，正是 typecheck 能直接抓到的那一类。
+  - 实测踩了一个坑：`plan-mode/index.ts`/`subagent/index.ts` 用 `.ts` 后缀的相对 import（bundler 风格），默认 tsconfig 会报 `TS5097`，加 `allowImportingTsExtensions: true` 就好——这是配置问题，不是代码问题，记在这里省得以后重新查一遍。
+- **shell**：`.pi/` 下所有 `*.sh` 过 `bash -n`（语法）+ `shellcheck`（ubuntu-latest runner 自带，不用额外装）。
+- **json**：`.pi/` 和仓库根目录下所有 `*.json` 用 `python3 -m json.tool` 校验合法性。
+- **frontmatter**：新写的 `.github/scripts/check-frontmatter.sh`——检查 `.pi/prompts/*.md` 有 `description`、`.pi/skills/*/SKILL.md` 有 `name`+`description`，**顺带把这次 `{{arg}}` 那个 bug 做成一条回归检查**：扫 `.pi/prompts/*.md` 里还有没有 `{{xxx}}` 这种 pi 根本不认识的占位符残留，有就直接 fail——这个检查脚本在当前分支（还没合并 fix 那个分支）上跑确实真实报错了，验证了检查本身是有效的，不是摆设。
+
+明确的边界：这条 CI **不**跑任何 extension/prompt 的行为测试（没有沙箱、没有真实调用 `pi` 的机制），只保证"能过编译/语法检查、格式没错"，跟 §9.13/§10.5 描述的"真的跑一次、读真实输出"那种验证不是一回事，互补关系，不是替代关系。
+
+---
+
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。
