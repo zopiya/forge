@@ -1,0 +1,14 @@
+{
+  "name": "forge-tooling",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only manifest for typechecking .pi/extensions/*.ts in CI. Forge itself ships no runtime code and is not a publishable package — this exists solely so `tsc` can resolve pi's own types.",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.1",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

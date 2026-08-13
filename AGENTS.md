@@ -141,6 +141,7 @@ Applies regardless of task:
 - Match existing project conventions (formatting, commit style, test layout) over introducing new ones.
 - Branch policy and commit discipline: see `.pi/skills/git/SKILL.md` — check current branch before any commit/merge/push, `main` is never committed to directly.
 - Prefer `/commit`, `/changelog`, `/readme`, `/status`, `/init`, `/btw`, `/release` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time. `/init` generates/updates `AGENTS.md` for a project (idempotent — never blindly overwrites a hand-authored one). `/btw <question>` answers a quick aside without touching the current task/plan state. `/release` chains version bump → changelog → tag → GitHub release → deploy, detecting which of `.pi/skills/{github,cloudflare,docker,ansible}/` actually applies to this project rather than assuming.
+- `.github/workflows/lint.yml` typechecks `.pi/extensions/*.ts` (`bun run typecheck` — same command locally), and syntax/shape-checks scripts, JSON, and prompt/skill frontmatter. This is mechanical hygiene, not a substitute for actually running something before calling it done — see `docs/design.md` §13.
 
 ## `.pi/work/` — durable task state
 
