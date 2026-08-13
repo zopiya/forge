@@ -14,6 +14,21 @@ Check whether `AGENTS.md` already exists at the repo root.
 
 **Step 2 — Generate from scratch (only when `AGENTS.md` is absent).**
 
+0. **Scaffold first, if this is genuinely a new project.** If the repo has no
+   real source structure yet (empty, or just a `README`/`LICENSE`/`.git`) —
+   confirm the stack/kind of project if it isn't already obvious (ask via the
+   `questionnaire` tool rather than guessing), then create the initial layout
+   *before* writing `AGENTS.md`: standard root files and top-level
+   directories from `.pi/skills/project-layout/SKILL.md`, plus the
+   stack-specific idiom from the matching `.pi/skills/<lang>/SKILL.md`'s
+   Layout section (`src/lib.rs` vs `src/main.rs` for Rust, `src/<package>/`
+   for Python, `src/index.ts` for TypeScript, etc. — read the actual section,
+   don't guess the convention from memory). Show the directory tree you're
+   about to create and get confirmation before creating it. **Skip this
+   sub-step entirely if the repo already has real source files** — describe
+   what's there in Step 1 below, don't impose a different shape on top of an
+   existing structure.
+
 Inspect the repository before writing anything:
 
 1. Stack and structure: language(s), package manager, build/test/lint commands actually present (`package.json` scripts, `justfile`, `Makefile`, `pyproject.toml`, `Cargo.toml`, etc.) — report only what's evidenced, never invent a command.

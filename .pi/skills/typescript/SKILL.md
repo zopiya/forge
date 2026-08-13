@@ -22,6 +22,30 @@ not a source of latest truth.
   Playwright for browser E2E.
 - Formatting/linting: repo config first; otherwise Prettier + ESLint.
 
+## Layout
+
+See `.pi/skills/project-layout/SKILL.md` for the cross-cutting discipline;
+this is the TypeScript-specific idiom it defers to.
+
+- `src/` for all source; compiled output (`dist/`/`build/`) gitignored, never
+  committed alongside source.
+- `src/index.ts` as the package/app entrypoint when there is a single one.
+- Tests: co-located `*.test.ts`/`*.spec.ts` next to the file under test, or a
+  parallel `test/`/`__tests__/` tree mirroring `src/` — match whatever the
+  repo already does, don't mix both styles in one project.
+- Structure `src/` by feature (`src/orders/`, `src/users/`) over by layer
+  (`src/{controllers,services,models}/`) once the app has more than a
+  handful of files — layer-first flattens badly as it grows; feature-first
+  keeps related files next to each other.
+- CLI entrypoints referenced from `package.json`'s `bin` field live in `bin/`,
+  not mixed into `src/`.
+- Workspaces (pnpm/npm/yarn): `packages/<name>/`, each with its own `src/`
+  and `package.json` — only once there are genuinely independent publishable
+  units, see `.pi/skills/project-layout/SKILL.md`'s monorepo guidance.
+- Cloudflare Workers projects: see `.pi/skills/cloudflare/SKILL.md` — the
+  `wrangler.toml`/`.jsonc` config lives at the project root regardless of
+  where `src/` conventions above put everything else.
+
 ## Decision Rules
 
 - App framework: extend the existing framework. For greenfield, escalate to a

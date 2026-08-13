@@ -12,6 +12,11 @@ bespoke layout invented per-project. This is the cross-cutting discipline —
 `.pi/skills/architecture/SKILL.md` covers code-level design decisions,
 this one covers where files physically live.
 
+For a genuinely new/empty project, `/init` (`.pi/prompts/init.md`) applies
+this skill and the matching per-language Layout section directly — it
+scaffolds the initial structure before writing `AGENTS.md`, rather than
+leaving it to be inferred ad hoc later.
+
 ## Before Adding Anything at the Root
 
 - Does this belong inside an existing directory instead of a new top-level

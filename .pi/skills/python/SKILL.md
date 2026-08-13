@@ -20,6 +20,27 @@ not a source of latest truth.
 - Pydantic for structured boundary validation when the project already uses it
   or when the boundary is substantial enough to justify it.
 
+## Layout
+
+See `.pi/skills/project-layout/SKILL.md` for the cross-cutting discipline;
+this is the Python-specific idiom it defers to.
+
+- `src/<package>/` layout (source under `src/`, not at repo root) for
+  anything beyond a single throwaway script — it forces the package to be
+  installed rather than accidentally importable from the working directory,
+  which catches missing-dependency and packaging bugs before they ship.
+  Flat `<package>/` at repo root is still common in older/simpler projects;
+  match what's already there rather than migrating an existing project
+  mid-task.
+- `tests/` at repo root, mirroring the package's internal structure
+  (`tests/test_<module>.py` alongside `src/<package>/<module>.py`).
+- `pyproject.toml` at root — the modern standard for metadata, dependencies,
+  and tool config (`[tool.ruff]`, `[tool.pytest.ini_options]`, ...); avoid
+  adding a separate `setup.py`/`setup.cfg` to a new project unless a
+  dependency genuinely requires the older build path.
+- `docs/` only once there's a real documentation build (Sphinx, MkDocs) —
+  don't create it speculatively for docstrings alone.
+
 ## Decision Rules
 
 - Web/API: follow the existing framework. For greenfield APIs, compare FastAPI

@@ -20,6 +20,26 @@ truth.
 - Tokio is the common async runtime for network services, but use the runtime
   already present in the repo.
 
+## Layout
+
+See `.pi/skills/project-layout/SKILL.md` for the cross-cutting discipline;
+Cargo itself dictates most of the Rust-specific idiom, so there's less
+judgment involved here than in other ecosystems — follow it rather than
+inventing a variant.
+
+- `src/main.rs` for a binary, `src/lib.rs` for a library; a crate producing
+  both has `src/lib.rs` plus a thin `src/main.rs` that depends on it.
+- Multiple binaries: `src/bin/<name>.rs`, one file per binary.
+- Unit tests inline in the module under test (`#[cfg(test)] mod tests`);
+  `tests/` at crate root only for integration tests that exercise the crate
+  through its public API as an external caller would.
+- `benches/` for Criterion benchmarks, `examples/` for runnable example
+  binaries — both optional, add only when they exist for real.
+- Workspace: root `Cargo.toml` with `[workspace] members = ["crates/*"]` (or
+  an explicit list), each member a full crate under `crates/<name>/` with
+  its own `Cargo.toml` — same "only for genuinely independent units" rule
+  as `.pi/skills/project-layout/SKILL.md`'s monorepo guidance.
+
 ## Decision Rules
 
 - Ownership: prefer clear ownership flow over clever lifetimes. Clone only when

@@ -635,6 +635,16 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 以后如果要让 pi 朝别的目标（不是审计）持续尝试，直接写一个新 prompt，调 `.pi/scripts/pi-loop.sh --prompt "..." --until/--duration/--max-rounds ...` 即可，不需要再写一次 while 循环。
 
+### 10.6 补上 `project-layout` 引用的空头支票 + 让 `/init` 真的去建骨架
+
+`project-layout` skill（§10.4 之外新加的，见 `feat/project-layout-skill` 分支）写了"具体语言的目录习惯参考 `typescript`/`python`/`rust` 三个 skill"，但实际打开这三个文件检查后发现里面完全没有目录布局相关内容——全是类型系统/错误处理/工具链命令。这是一个真实查出来的缺口，不是假设：一个 skill 引用另一个 skill 却没兑现，比没有这个引用更糟——会让人以为查过了。
+
+修法：给 `typescript`/`python`/`rust` 三个 skill 各加一个 `## Layout` 小节，内容是该生态的标准目录骨架（TS 的 `src/index.ts` + feature-first 组织、Python 的 `src/<package>/` layout 取舍、Rust 由 Cargo 本身规定的 `src/main.rs`/`src/lib.rs`/`tests/`/`benches/` 约定），每个都回指 `project-layout` 讲跨语言的通用纪律。
+
+同时 `/init` 之前只在"从头生成"路径里写一个 `AGENTS.md`，目录该怎么摆完全是纸面知识，从来没有被执行过。补了 Step 2 的第 0 步：如果仓库确实是空的/近乎空的（没有真实源码，最多一个 README/LICENSE），先确认项目类型/技术栈（用 `questionnaire` 工具问，不瞎猜），照 `project-layout` + 对应语言 skill 的 Layout 小节把初始骨架建出来、确认后再落地，然后才继续生成 `AGENTS.md`。如果仓库已经有真实源码结构，这一步直接跳过——不对着别人已有的组织方式强行套一个新形状。
+
+这次顺带把 `project-layout` skill 合并进了 `feat/pi-commands-and-settings` 分支（而不是继续留在自己独立的 `feat/project-layout-skill` 分支）——因为 `/init` 依赖它，两个继续分开会导致谁先合并、谁先测都测不出真实效果。
+
 ---
 
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。
