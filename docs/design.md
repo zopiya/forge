@@ -645,6 +645,14 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 这次顺带把 `project-layout` skill 合并进了 `feat/pi-commands-and-settings` 分支（而不是继续留在自己独立的 `feat/project-layout-skill` 分支）——因为 `/init` 依赖它，两个继续分开会导致谁先合并、谁先测都测不出真实效果。
 
+## 11. `.pi/prompts/*.md` 里 `{{arg}}` 占位符不生效的 bug（修复）
+
+查证到的一个真 bug：pi 的 prompt template 参数替换（`substituteArgs()`，`dist/core/prompt-templates.js`）只认正则 `\$\{(\d+|ARGUMENTS|@):-...\}` 和 `\$(ARGUMENTS|@|\d+)` 这两类写法，根本不处理 `{{xxx}}` 语法。`readme.md`/`commit.md`/`changelog.md`/`smoke-test.md`/`retro.md` 五个既有模板都用了 `{{focus}}`/`{{scope}}`/`{{range}}`/`{{session}}` 这种写法——用户敲 `/readme 某主题`、`/retro <导出路径>` 这类带参数的调用时，参数从来没有被替换进模板，模型看到的是字面文本 `{{focus}}`/`{{session}}`。`/retro` 这个尤其严重：它的核心输入就是一个会话导出文件路径，这个 bug 相当于让 `/retro <path>` 从来没有真正读到你给的那个文件。
+
+改法：全部换成真正生效的 `$1`/`${1:-default}` 语法，同时给每个模板补上 `argument-hint` frontmatter（原来都没有，加上之后自动补全能看到参数提示）。`changelog.md` 里 `{{range}}` 出现两次，第二处（"用 range 当版本号标题"那句）改成直接引用"上面给出的 range/tag"而不是重复展开 `${1:-...}`，避免默认值文本（比如 "last 50 commits"）被当成字面版本号标题这种没意义的组合。
+
+这个问题最早是在做 `/init`/`/btw`/`/audit` 那批工作时查证到的（当时只测了 `readme.md`/`commit.md`/`changelog.md` 三个，判定为"超出那次范围，先不修"），这次单独成一个 fix 补上，顺带发现 `smoke-test.md`/`retro.md` 也有同样问题——一并修了，不是新范围，是同一个 bug 的完整清理。
+
 ---
 
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。
