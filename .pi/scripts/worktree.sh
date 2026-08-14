@@ -87,9 +87,9 @@ remove)
 			echo "Confirm any listed files are just build/test byproducts before re-running with --force — see .pi/skills/worktree/SKILL.md." >&2
 			exit 1
 		fi
-		git worktree remove "$path"
+		git worktree remove "$path" || exit $?
 	else
-		git worktree remove --force "$path"
+		git worktree remove --force "$path" || exit $?
 	fi
 
 	if [ "$delete_branch" = "1" ] && [ -n "$branch" ]; then

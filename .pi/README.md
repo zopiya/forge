@@ -25,6 +25,4 @@ A pure-dev coding agent setup for [pi](https://pi.dev). Clone this as a template
 
 ## Status
 
-Early. `.pi/design.md` §5/§6 tracks what's built (P1: skills/AGENTS.md/prompts/`.pi/work/`; P2: agent profiles + the vendored `subagent` extension) versus deliberately deferred (P3: guardrail extension, only if ever running outside a container; P4: CLI-wrapping tools, only as actually needed).
-
-**Correction**: the design doc originally claimed v1 needs zero extension code. That was wrong — `.pi/agents/*.md` dispatch is not a pi-core feature, it's defined entirely by an example extension pi ships, which had to be vendored in `.pi/extensions/subagent/` for scout/planner/reviewer to do anything at all. The "no guardrail extension" conclusion still holds; "no extension code at all" didn't.
+**1.0.** The original phased rollout (`.pi/design.md` §5/§6, P1-P4) is long since done; what's shipped now is the result of that plus a long run of dogfooding, extension audits, and structural cleanup recorded in §7 onward — read `.pi/design.md` if you want the "why," not just the "what." The guardrail extension (originally P3) stayed deliberately undone: Forge still assumes a container boundary as the real safety net (`.pi/FORGE.md`'s "Non-negotiable" section), see `.pi/design.md` §3.1/§3.4 if that assumption doesn't hold for you.
