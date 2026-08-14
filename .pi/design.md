@@ -842,4 +842,21 @@ Codex 交叉审计的其余结论（`forge-core.ts` 跟 pi 0.84.1 的 extension 
 
 ---
 
+## 22. `trigger-compact.ts` 从绝对 token 阈值改成按 context window 百分比触发
+
+用户反馈"只用了约 10% 的上下文就被自动压缩了"。查下来根因是 `trigger-compact.ts`（§9.13 复查过一次，当时只记了它的一个已知 bug，没细看阈值本身的设计）用的是绝对 token 数：`COMPACT_THRESHOLD_TOKENS = 100_000`，通过 `ctx.getContextUsage().tokens` 判断，完全不看 `contextWindow`。这个数字在小窗口模型上合理，但换到一个 ~1M token 窗口的模型上，100k 只占 ~10%——阈值没有跟着窗口缩放，是它把触发点拖到了不合理的早期。
+
+更值得记一笔的是：**pi 核心自己内置的 auto-compaction 早就是按比例设计的**（`contextTokens > contextWindow - reserveTokens`，`reserveTokens` 默认 16384，独立于这个 extension 运行，默认开启）。`trigger-compact.ts` 这个 vendored extension 相当于在核心机制之外又叠了一层不随窗口缩放的绝对阈值，两层机制的设计哲学其实不一致，只是之前没人对比过。`ctx.getContextUsage()` 返回的 `ContextUsage` 对象本来就带 `contextWindow`/`percent`（pi-core 算好的百分比）两个字段，upstream 只读了 `.tokens`；`custom-footer.ts`（§9.10）已经在用 `.percent`/`.contextWindow` 这个模式，是现成的先例，这次改成同一套。
+
+**改动**：
+1. 阈值改成 `COMPACT_THRESHOLD_PERCENT = 80`，判断源从 `usage.tokens` 换成 `usage.percent`。
+2. 顺手修掉 §9.13 记录的已知 bug——原来的"跨越阈值"（低→高跳变）触发逻辑，session 一开始 token 数就已经超阈值时永远不触发。改成 `compactionPending` 布尔位：达到阈值且没有一次待完成的压缩才触发；`percent` 掉回阈值以下（压缩生效）或者压缩报错，都复位这个标志。这样既不依赖"从低到高"的跳变，也避免 `ctx.compact()`（fire-and-forget，没有 await）在同一个高占用区间内被反复触发。
+3. 给自动触发路径新增 `customInstructions`（这个参数 upstream 就有，但只有手动 `/trigger-compact` 命令在传），内容是一段固定的连续性提示，要求摘要器优先保真"当前在做的任务、下一步、TODO/checklist 状态"。这不是因为压缩本身会切在 tool call 中间——`turn_end` 之后、下一轮提交之前才跑，规则上不会切在执行过程里——而是自动触发的压缩没有一个人在旁边确认摘要抓没抓对重点，跟 `/handoff`（有人工编辑摘要这一步）比起来这层保真只能靠 prompt 提示补。手动命令的行为不变，没传 instructions 时仍是 `undefined`。
+
+**明确没有做的**：
+- 没有动 pi 核心自己的 `compaction.reserveTokens`/`keepRecentTokens`（`.pi/settings.json` 目前不配置 `compaction` 块，吃 pi-core 默认值）——那是独立于这个 extension 的兜底机制，本身已经是按窗口比例触发，只是阈值离窗口上限很近，不适合当主要触发点，不需要动它。
+- 没有把 80% 做成 `.pi/settings.json` 里可配置的项，保持跟原文件一样"写死在文件顶部的常量"这个风格——要调阈值直接改常量，没有引入新的配置面。
+
+---
+
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。
