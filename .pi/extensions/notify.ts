@@ -2,9 +2,9 @@
  * Pi Notify Extension
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  *
- * Deviations from upstream (see docs/design.md §9.4–§9.5):
+ * Deviations from upstream (see .pi/design.md §9.4–§9.5):
  * - Added an ntfy.sh push channel (notifyNtfy) alongside the original terminal
  *   protocols. Terminal notifications (OSC 777/99/Windows Toast) only reach you
  *   if a terminal is open and attached — no good when pi is running unattended
@@ -16,7 +16,7 @@
  *   the static "Ready for input" — more useful on a lock screen, and the title
  *   includes the working directory so multiple concurrent pi runs are
  *   distinguishable.
- * - Added tmux-aware notification (see docs/design.md §9.5). This is the
+ * - Added tmux-aware notification (see .pi/design.md §9.5). This is the
  *   "server" scenario: pi running inside a detached/attached tmux on a
  *   remote box, you're bouncing between tmux windows over SSH. Two problems
  *   the plain OSC codes above don't solve there:
@@ -34,7 +34,7 @@
  *        double up with a real desktop notification when passthrough *is*
  *        configured.
  * - Gated the whole `notify()` call on `ctx.hasUI` (robustness audit,
- *   docs/design.md §9.13). Upstream fires unconditionally on `agent_end`,
+ *   .pi/design.md §9.13). Upstream fires unconditionally on `agent_end`,
  *   which includes every non-interactive `pi --mode json -p` run — exactly
  *   what `subagent` dispatch uses for scout/planner/reviewer/builder. Two
  *   concrete problems, not hypothetical: (1) notifyTerminal()/

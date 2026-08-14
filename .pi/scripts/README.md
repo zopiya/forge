@@ -46,7 +46,7 @@ same handful of lines covers any other unattended goal — no new `while` loop
 needed.
 
 Rationale for why this lives outside pi entirely (not an extension/timer) is
-in `docs/design.md` §10.3/§10.5.
+in `.pi/design.md` §10.3/§10.5.
 
 ## `worktree.sh`
 
@@ -60,6 +60,6 @@ use it too, e.g. for Race mode (see AGENTS.md's "Race mode mechanics").
 
 Run `.pi/scripts/worktree.sh --help` for the full command list. See
 `.pi/skills/worktree/SKILL.md` for when to reach for a worktree and the
-reasoning behind the gotchas this script encodes, and `docs/design.md` §14
+reasoning behind the gotchas this script encodes, and `.pi/design.md` §14
 for why worktree handling lives here as a script rather than being
 special-cased inside `loop.sh` or duplicated across every consumer.

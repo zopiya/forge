@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 # Forge has no automated test framework for extensions/prompts/scripts —
-# validation has always been manual (docs/design.md §9.13/§10.5: read the
+# validation has always been manual (.pi/design.md §9.13/§10.5: read the
 # code, run it once with a fake pi shim or bun -e, note findings in
 # design.md). This workflow automates the cheap, mechanical part of that —
 # typecheck, script syntax, JSON validity, prompt/skill frontmatter shape —

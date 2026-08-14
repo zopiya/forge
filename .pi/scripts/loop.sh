@@ -20,7 +20,7 @@
 # background resources/timers (see pi's extensions.md); this mirrors the
 # existing subagent-dispatch subprocess model instead — a real separate
 # `pi` process per round, scheduled by something outside pi. See
-# docs/design.md §10.3/§10.5 for the full rationale.
+# .pi/design.md §10.3/§10.5 for the full rationale.
 #
 # Usage:
 #   loop.sh --prompt "<text>" --until 04:00 --max-rounds 7

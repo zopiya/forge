@@ -10,7 +10,7 @@ Generate or update `AGENTS.md` for this project — the file `pi` auto-loads at 
 Check whether `AGENTS.md` already exists at the repo root.
 
 - **If it does not exist** (bootstrapping a fresh project onto the Forge methodology): go to Step 2, "Generate from scratch."
-- **If it already exists**: do NOT generate new content or attempt a "refresh" from scratch, even if asked to run `/init` again. `AGENTS.md` is a hand-authored, carefully-considered file — Forge's own is documented decision-by-decision in `docs/design.md`. Go to Step 3, "Propose additions only," instead.
+- **If it already exists**: do NOT generate new content or attempt a "refresh" from scratch, even if asked to run `/init` again. `AGENTS.md` is a hand-authored, carefully-considered file — Forge's own is documented decision-by-decision in `.pi/design.md`. Go to Step 3, "Propose additions only," instead.
 
 **Step 2 — Generate from scratch (only when `AGENTS.md` is absent).**
 
@@ -45,7 +45,7 @@ Write `AGENTS.md` covering, in this order, each section only if the repository a
 - Agents available for dispatch, if `.pi/agents/*.md` exists — one line each, pointing at the file rather than duplicating it.
 - Extensions available, if `.pi/extensions/*.ts` exists — one line each: command/trigger + one-sentence purpose.
 - Working style / code conventions actually evidenced by the repo (existing lint config, formatting, commit style from `git log`) — don't prescribe a style the repo doesn't already follow.
-- A pointer to `docs/design.md` (or wherever rationale lives) if one exists, or a note that there isn't one yet.
+- A pointer to `.pi/design.md` (or wherever rationale lives) if one exists, or a note that there isn't one yet.
 
 Keep it concise — this file loads every session, verbosity has an ongoing cost. Use Forge's own `AGENTS.md` (this repository, if visible) as a reference for *shape*, not content — a new project's file describes that project, not Forge.
 

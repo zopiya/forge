@@ -729,6 +729,16 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 - `.github/workflows/lint.yml` 的 `typecheck` job 加 `defaults.run.working-directory: .pi`，`bun install --frozen-lockfile`/`bun run typecheck` 都在 `.pi/` 里跑；本地对应命令变成 `cd .pi && bun run typecheck`。`json` job 不用改——它本来就分别扫 `.pi/**/*.json` 和仓库根目录，三个文件挪进 `.pi/` 之后自动落进前一半的扫描范围。
 - 实测方式跟 §9.13/§10.5/§14 一致：删掉根目录残留的 `node_modules/`，在 `.pi/` 里跑一次真正干净的 `bun install --frozen-lockfile && bun run typecheck`，确认能从零装好、typecheck 照常通过，不是"看起来对"。
 
+## 19. `README.md`/`docs/design.md` 也挪进 `.pi/`，仓库根目录只留 `AGENTS.md`
+
+§18 挪完 `package.json`/`tsconfig.json`/`bun.lock` 之后，同一个逻辑继续往下推：`README.md`（本来在根目录，GitHub 会渲染成仓库主页）和 `docs/design.md`（本文档）一样是 Forge 自己的东西，不是被开发项目的内容，理应跟 `.pi/skills`、`.pi/extensions` 放在同一个命名空间下，不占用留给被开发项目的根目录。
+
+**决定**：`README.md` → `.pi/README.md`，`docs/design.md` → `.pi/design.md`（`docs/` 目录本身删掉，只装过这一个文件）。仓库根目录现在只剩三样东西：`AGENTS.md`（pi 只在根目录或祖先目录发现它，没法挪）、`.github/workflows/`（GitHub Actions 的硬性发现路径，挪了 CI 直接失效）、`.gitignore`（挪进 `.pi/` 之后忽略规则只对 `.pi/` 内部生效，仓库其他地方的 `*.jsonl`/`node_modules/` 等就不再被忽略，等于功能倒退）——这三个不是没考虑挪，是挪了会真的坏掉或者失去 pi/GitHub/git 自己的原生发现机制，不是"整洁强迫症"能覆盖的范围。
+
+全仓库 25 处引用 `docs/design.md` 的地方（`AGENTS.md`、CI 脚本、所有 `.pi/agents/*.md`、`.pi/extensions/*.ts`、`.pi/scripts/*`、部分 `.pi/prompts/*.md`）全部同步改成 `.pi/design.md`；本文档内部历史条目里提到的 `docs/usage.md`/`docs/security.md` 字样是 pi 自己上游文档的路径（`@earendil-works/pi-coding-agent` 包内），跟 Forge 的 `docs/` 目录无关，没有改。
+
+这次改动是 §17（`.pi/audit` 整个砍掉）之后同一次"整体做减法"要求的延续，也是对 §16 之前发现的"根目录不该被 Forge 自己的文件占用"这条原则（§18 已经点出）最后一次收尾——收尾之后，`AGENTS.md` 是 pi clone 这个模板之后**唯一**会自动发现、且必须留在根目录的 Forge 文件。
+
 ---
 
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。

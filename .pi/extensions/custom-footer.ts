@@ -2,9 +2,9 @@
  * Custom Footer Extension - demonstrates ctx.ui.setFooter()
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  *
- * Deviations from upstream (see docs/design.md §9.4, §9.6–§9.10):
+ * Deviations from upstream (see .pi/design.md §9.4, §9.6–§9.10):
  * This went through several rounds (block bar → two-line, pipe-heavy → one
  * line, screenshot-matched → duration/clock added) before landing here on a
  * "car dashboard" brief: only the two things you'd actually glance at, not

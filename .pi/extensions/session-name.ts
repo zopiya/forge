@@ -2,7 +2,7 @@
  * Session naming example.
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  * Unmodified from upstream — pairs naturally with the .pi/work/<feature-slug>
  * naming convention when several sessions run in parallel across worktrees.
  *

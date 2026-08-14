@@ -5,7 +5,7 @@
  * Multiple questions: tab bar navigation between questions
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  * Unmodified from upstream. Added during a self-audit (2026-08-12), not the
  * original §9 batch: `.pi/extensions/plan-mode/index.ts` already lists
  * "questionnaire" in PLAN_MODE_TOOLS and its before_agent_start prompt already

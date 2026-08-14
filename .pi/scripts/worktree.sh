@@ -12,12 +12,12 @@
 # worked example) — calls the same thing instead of each re-deriving the
 # commands by hand. See
 # .pi/skills/worktree/SKILL.md for the reference knowledge (when to use a
-# worktree, naming convention) and docs/design.md §14 for the rationale.
+# worktree, naming convention) and .pi/design.md §14 for the rationale.
 #
 # This deliberately does NOT judge whether a dirty worktree is safe to
 # force-remove (e.g. "just __pycache__" vs real uncommitted work) — that
 # judgment stays with the caller, consistent with Forge's container-first,
-# no-silent-guardrails stance (docs/design.md §3.1/§3.4). It only reports
+# no-silent-guardrails stance (.pi/design.md §3.1/§3.4). It only reports
 # the dirty state clearly and requires an explicit --force to proceed.
 #
 # Usage:

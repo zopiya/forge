@@ -2,12 +2,12 @@
  * Plan Mode Extension
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions/plan-mode
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  * Deviations from upstream:
  * - The before_agent_start prompt no longer references a "brave-search skill" —
  *   Forge has no such skill, see .pi/skills/.
  * - utils.ts's DESTRUCTIVE_PATTERNS gained three entries (robustness audit,
- *   docs/design.md §9.13): `find -delete/-exec`, `curl -o/-O`, and `sort -o`
+ *   .pi/design.md §9.13): `find -delete/-exec`, `curl -o/-O`, and `sort -o`
  *   all write to disk without producing the literal ">" the generic redirect
  *   check catches, and SAFE_PATTERNS allowlists all three tools
  *   unconditionally — real bypasses of "bash restricted to read-only", not

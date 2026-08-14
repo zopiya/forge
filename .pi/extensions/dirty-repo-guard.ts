@@ -5,13 +5,13 @@
  * Useful to ensure work is committed before switching context.
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  * Unmodified from upstream. Not the "confirm before destructive action"
  * guardrail §3.4 already declined — the risk here isn't an irreversible
  * container-boundary action, it's uncommitted work in your head getting
  * orphaned by a session switch/fork, which the container doesn't protect
  * against at all. Relevant to Forge's multi-worktree/parallel-session usage
- * in particular. See docs/design.md §9.12.
+ * in particular. See .pi/design.md §9.12.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";

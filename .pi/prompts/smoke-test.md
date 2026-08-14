@@ -38,7 +38,7 @@ If there's no disposable toy code to act on yet, create a small one now in whate
 
 **Phase 6 — Race mode**
 
-12. Pick one small, real design decision with two plausible implementations for the toy app. Run an actual race: `git worktree add` two variants, parallel-dispatch `builder` into each with its own `cwd`, compare real diffs and verification, pick a winner, merge it, `git worktree remove` both. This is the least-exercised path — report every step, including anything that didn't match `docs/design.md` §7.3 as written.
+12. Pick one small, real design decision with two plausible implementations for the toy app. Run an actual race: `git worktree add` two variants, parallel-dispatch `builder` into each with its own `cwd`, compare real diffs and verification, pick a winner, merge it, `git worktree remove` both. This is the least-exercised path — report every step, including anything that didn't match `.pi/design.md` §7.3 as written.
 
 **Phase 7 — Prompt templates**
 
@@ -48,7 +48,7 @@ If there's no disposable toy code to act on yet, create a small one now in whate
 
 **Phase 8 — Report**
 
-16. Print one table: phase → pass/partial/fail → one-line evidence. Call out anything that contradicts `AGENTS.md` or `docs/design.md` as currently written — that's exactly the input `/retro` needs next.
+16. Print one table: phase → pass/partial/fail → one-line evidence. Call out anything that contradicts `AGENTS.md` or `.pi/design.md` as currently written — that's exactly the input `/retro` needs next.
 
 After this session ends, `/export` it and run `/retro <path-to-export>` in a fresh session to turn any real findings into doc fixes.
 

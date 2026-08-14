@@ -5,9 +5,9 @@
  * Useful for preventing accidental modifications to sensitive files.
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  *
- * Deviations from upstream (see docs/design.md §9.12):
+ * Deviations from upstream (see .pi/design.md §9.12):
  * - Reads `event.input.file_path` as a fallback when `path` is absent. The
  *   built-in write/edit tools accept both field names (dist/core/tools/write.js:
  *   `args?.file_path ?? args?.path`) — upstream only read `path`, which throws
