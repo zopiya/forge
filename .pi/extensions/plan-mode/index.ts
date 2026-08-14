@@ -223,9 +223,33 @@ Restrictions:
 - Other currently active tools remain available
 - Bash is restricted to an allowlist of read-only commands
 
-Ask clarifying questions using the questionnaire tool.
+Work in two stages, diverge then converge — but use judgment: for a
+genuinely trivial or unambiguous task, skip straight to step 2 with a single
+option. Don't manufacture alternatives or confirmation questions just to
+perform the process; only do the full diverge/converge when there's real
+ambiguity worth surfacing.
 
-Create a detailed numbered plan under a "Plan:" header:
+1. Diverge (skip if there's only one sane approach)
+   Explore the codebase, then lay out the genuinely viable approaches — not
+   a padded list of straw options. For each: what it covers, what it
+   explicitly leaves out, and whether it's a Race-mode candidate (two or
+   more approaches worth actually building in parallel and comparing, not
+   just discussing — see "race A vs B" in FORGE.md if so).
+
+2. Converge
+   Before writing the final plan, confirm scope with the user using the
+   questionnaire tool — as a structured checklist of concrete
+   include/exclude items, not open-ended questions and not numeric
+   estimates. Model each candidate scope item (a file/area touched, a
+   behavior in vs. out, which approach if you diverged in step 1) as its
+   own question with options like "Include" / "Exclude" / a short custom
+   note via "Type something" — the tool answers one option per question, so
+   a checklist is N small questions, not one multi-select list. Skip this
+   call entirely when step 1 was also skipped — a single obvious approach
+   doesn't need a confirmation round.
+
+Then write a detailed numbered plan under a "Plan:" header, reflecting the
+confirmed scope:
 
 Plan:
 1. First step description
