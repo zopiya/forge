@@ -758,6 +758,16 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 同步更新了所有指向 `AGENTS.md`"Forge 自己的部分"的地方，改成指向 `.pi/FORGE.md`：`.pi/README.md`、`.pi/extensions/protected-paths.ts`、`.pi/scripts/README.md`、`.pi/prompts/{retro,smoke-test}.md`、`.pi/skills/{spec-driven,brainstorm,worktree,git}/SKILL.md`。`.pi/prompts/{readme,init}.md`、`.pi/skills/project-layout/SKILL.md` 里提到 "AGENTS.md" 的地方留着没动——那些说的是"项目自己的 AGENTS.md"这个通用概念，跟 Forge 自己的文件无关。
 
+## 21. Codex 交叉审计发现一个真 bug：`worktree.sh remove` 失败时可能报告成功
+
+§14 落地 `worktree.sh` 之后，用 Codex 对整个仓库做了一次独立的 1.0 前交叉审计（跟仓库自己的模型分开跑，看会不会漏掉自己盲区里的问题）。查出了一个真实 bug，其余全部通过：
+
+**问题**：`remove` 子命令调用 `git worktree remove "$path"`/`git worktree remove --force "$path"` 之后不检查退出码，脚本本身也没开 `set -e`。如果这条命令失败（比如传了一个根本不是本仓库注册过的 worktree 的路径），紧接着的 `if [ "$delete_branch" = "1" ] && ...; fi`——在没传 `--delete-branch` 时条件为假、`if` 语句本身仍然返回 0——变成脚本最后执行的语句，把前面失败的退出码吞掉了，脚本整体报 `exit 0`。Codex 用两个一次性仓库复现：`cd repo-a && worktree.sh remove <repo-b 的路径>` 打出 `fatal: '<path>' is not a working tree`，但 `$?` 是 0。这正是这类脚本最危险的一类 bug——调用方（比如 `.pi/audit/run.sh` 曾经的模式，或者任何未来的 wrapper）会以为清理成功了，实际上 worktree 根本没删掉。
+
+**修复**：`git worktree remove ... || exit $?`（两条分支都加），失败立刻带着 Git 自己的退出码退出，不再往下走。用 Codex 复现的完全相同场景验证过：改前 `exit=0`，改后 `exit=128`。同时重跑了一遍 §14 当时写的全套回归（`add`/`list`/dirty 拒绝/`--force`/`--delete-branch` 的 `-d`/`-D` 分支/已存在分支复用），全部行为不变——这个修复只在失败路径上生效，没碰到任何成功路径的逻辑。
+
+Codex 交叉审计的其余结论（`forge-core.ts` 跟 pi 0.84.1 的 extension API 匹配、CI 三项检查真跑通过、没有指向旧路径的死引用、`/init` 的项目/Forge 分离逻辑成立、`.pi/design.md` §14/16/17/18/19/20 跟实际代码一致）全部确认无误，不重复记录。
+
 ---
 
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。
