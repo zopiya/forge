@@ -20,7 +20,10 @@
  * - Auto-triggered compactions now pass `customInstructions` biasing the
  *   summarizer to preserve in-progress task state, so the session can pick
  *   back up immediately after compaction instead of losing the thread.
- *   Manual `/trigger-compact` behavior is unchanged.
+ *   Manual `/recap` behavior is unchanged.
+ * - Command renamed from `/trigger-compact` to `/recap` (.pi/design.md
+ *   §25) — a bare `compact` would have collided with pi's own built-in
+ *   `/compact`; "recap" reflects this version's continuity-preserving bias.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -79,7 +82,7 @@ export default function (pi: ExtensionAPI) {
 		triggerCompaction(ctx, CONTINUITY_INSTRUCTIONS);
 	});
 
-	pi.registerCommand("trigger-compact", {
+	pi.registerCommand("recap", {
 		description: "Trigger compaction immediately",
 		handler: async (args, ctx) => {
 			const instructions = args.trim() || undefined;

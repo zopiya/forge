@@ -56,6 +56,10 @@
 - [19. `README.md`/`design.md` 挪进 `.pi/`（后续变化见 §20）](#19-readmemddocsdesignmd-也挪进-pi仓库根目录只留-agentsmd)
 - [20. `AGENTS.md` 交还给项目，`.pi/FORGE.md` + extension 注入](#20-agentsmd-交还给项目forge-自己的运作说明搬进-piforgemd靠-extension-注入-system-prompt)
 - [21. Codex 交叉审计：`worktree.sh remove` 的一个真 bug](#21-codex-交叉审计发现一个真-bugworktreesh-remove-失败时可能报告成功)
+- [22. `trigger-compact.ts` 从绝对 token 阈值改成按 context window 百分比触发](#22-trigger-compactts-从绝对-token-阈值改成按-context-window-百分比触发)
+- [23. 路由表微调：探索类任务更倾向默认 dispatch scout](#23-路由表微调探索类任务更倾向默认-dispatch-scout对-237-undershoot-原则的一次小幅松动不是推翻)
+- [24. Forger 人格加一点轻松感——修订 §17 的克制版语气决定](#24-forger-人格加一点轻松感修订-17-的克制版语气决定)
+- [25. 斜杠命令去连字符：`/label`、`/recap`、`/smoketest`](#25-斜杠命令去连字符session-name-label-trigger-compact-recap-smoke-test-smoketest)
 
 ---
 
@@ -223,6 +227,8 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 
 **默认判断偏好**（原样保留，是好的工程判断，不依赖具体架构）：拿不准的时候，往"更轻"的方向走，不要预设任务比实际复杂。
 
+> **后续变化（§23）**：探索类任务这一个形状后来做了小幅松动，见 §23。
+
 **常见任务类型的默认判断链**（原 Composition Matrix，按 Forge"默认不拆"的原则重新解读——下面这些阶段大多数时候都在同一个 session 里完成，不是每个箭头都对应一次真实 dispatch）：
 
 | 意图 | 默认链路 |
@@ -381,6 +387,8 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 
 ### 第一次全链路 `/smoke-test`：GitHub Codespace 里真实跑通
 
+> **后续变化（§25）**：命令后来改名 `/smoketest`，见 §25。
+
 在真实 Codespace 容器（`/.dockerenv` + `CODESPACES=true`，不是本地 macOS）里跑了 `.pi/prompts/smoke-test.md` 的完整 16 步，结果 **15 pass / 1 partial**——覆盖了容器确认、启动扫描、纯问答路由、单会话小任务（技能自动加载）、git 分支门禁、并行 scout dispatch、chain dispatch、Guard 门禁、完整 spec-driven 生命周期、**Race 模式全链路**（首次真实跑通）、四个 prompt template。跑完导出 `test.jsonl`，按 `retro.md` 的方法过了一遍，只对"文档缺口"类出了修改，其余（如 reviewer 没执行逐字引用指令这种一次性模型失误）按 `retro.md` 的分类原则记录不改：
 
 1. **Chain 结果只暴露最后一步的输出**（Step 9 partial 的根因）——调用方拿不到中间步骤 `{previous}` 被替换成的具体文本，只能看到链条最后一个 agent 的回复。`AGENTS.md`"Mechanics worth knowing"补了一条：需要核实某个中间步骤的确切输出时，用 `single` 单独 dispatch 那一步，别指望从 chain 结果里看到。
@@ -408,6 +416,8 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 **这批（P2.5）全部用 vendor 方式**，因为都是官方 `examples/extensions/` 里的独立小文件、没有外部依赖，vendor 最简单、clone 即用、零网络依赖。`pi-review` / `pi-review-loop` 是维护在独立仓库的完整包，**调研过了但这轮先不落地**——真要装的话应该用 `pi install -l git:github.com/earendil-works/pi-review`（`.gitignore` 要记得补 `.pi/npm/`、`.pi/git/` 两行），不要手动 vendor 会跟不上上游更新。记这笔是为了不让以后的自己重新做一遍同样的调研。
 
 ### 9.2 引入的六个 extension
+
+> **后续变化（§25）**：`session-name.ts`/`trigger-compact.ts` 的命令名后来分别改成 `/label`/`/recap`，见 §25。
 
 跟 `subagent` 一样，全部原样搬自 `earendil-works/pi` 的 `examples/extensions/`，只有两处必要的偏离（都记在对应文件的头部注释里，不只是这里）：
 
@@ -781,6 +791,8 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 ## 17. 项目瘦身：砍掉 `.pi/audit/`、删掉 "loop until X"、引入 Forger 身份
 
 > **后续变化（§20）**：Identity 这部分内容后来也搬进了 `.pi/FORGE.md`，见 §20。
+>
+> **后续变化（§24）**：语气克制这条决定后来做了小幅修订，见 §24。
 
 `APPEND_SYSTEM.md` 那次清理之后，提出了一个更大的问题——整体做减法。查证了两个具体疑点，另外单独定了一个风格决定。
 
@@ -856,6 +868,38 @@ Codex 交叉审计的其余结论（`forge-core.ts` 跟 pi 0.84.1 的 extension 
 **明确没有做的**：
 - 没有动 pi 核心自己的 `compaction.reserveTokens`/`keepRecentTokens`（`.pi/settings.json` 目前不配置 `compaction` 块，吃 pi-core 默认值）——那是独立于这个 extension 的兜底机制，本身已经是按窗口比例触发，只是阈值离窗口上限很近，不适合当主要触发点，不需要动它。
 - 没有把 80% 做成 `.pi/settings.json` 里可配置的项，保持跟原文件一样"写死在文件顶部的常量"这个风格——要调阈值直接改常量，没有引入新的配置面。
+
+## 23. 路由表微调：探索类任务更倾向默认 dispatch scout（对 §2/§3.7 undershoot 原则的一次小幅松动，不是推翻）
+
+探索类任务经常卡在"这个要不要 dispatch scout"上——多数时候答案其实是"要"，因为 scout 本身足够便宜（只读、并行、cheap/fast 模型），犹豫的成本比 dispatch 本身还高。§2/§3.7 记的 undershoot 原则（"拿不准的时候往更轻的方向走"）作为整体判断基调依然成立，但套在"探索"这一个具体任务形状上偏保守了。
+
+**改动**（`.pi/FORGE.md` 路由表，两处措辞/阈值微调，没有新增行）：
+1. 主路由表 "exploration" 一行的触发条件放宽：不再要求先看出多个独立工作流才触发，单个探索类问题只要有几个值得并行查的角度就够；handling 措辞从"Dispatch scout in parallel"改成更明确的默认倾向表述（"lean toward... by default"）。
+2. "Default chains by intent" 表格上方说明句加一句例外：explore 阶段是"默认倾向 dispatch"的例外，其余阶段（plan/build/test/review）维持原来"只在真正需要隔离时才 dispatch"不变。
+
+**明确没有变的**：判断"要不要开一个 agent"的整体基调不变——单一职责任务、`.pi/work/` 门槛、Race/chain 触发词都没动；scout 之外的三个 agent（planner/reviewer/builder）的默认调度倾向也没动。这是收窄到"探索"这一个任务形状的局部松动，不是把 undershoot 原则整体改成"多 dispatch"。
+
+## 24. Forger 人格加一点轻松感——修订 §17 的克制版语气决定
+
+§17 当时刻意选了克制版语气——不堆锻造/打磨类比喻，不写成一整套人格设定——理由是避免跟 §2"系统提示应该精简"这条原则冲突。这次用户明确要求松动这一点：这类工具里回复语气对使用体验有实际影响，专业性依然第一位，但偶尔一点轻松感能让日常沟通更友好，不代表要走向堆砌比喻的完整人设。
+
+**改动**（`.pi/FORGE.md` Identity + Working style 两处，各一两句，非整节重写）：
+- Identity：技术内容的密度/直接度不变，但普通对话回复允许偶尔带一点 Forger 自己的语气个性——是语气，不是注水。
+- Working style：加一条带示例的 bullet，示例用用户给定的那句——"探索完成，找到根因了：`worktree.sh` 的 `--force` 分支漏了错误检查。这就去修。"——作为"轻"的标尺，避免以后跑偏成堆砌比喻。
+
+**明确没有变的**：commit message / PR 描述保持中性专业、零人格化措辞这条硬边界（FORGE.md 原 22-24 行，Identity 本来就写了）原样保留，这次改动完全没碰、也不允许被后续改动松动。系统提示总长度只加了几句话，没有回到"整套人格设定"。
+
+## 25. 斜杠命令去连字符：`/session-name` → `/label`，`/trigger-compact` → `/recap`，`/smoke-test` → `/smoketest`
+
+单词化清理时发现：三个自定义命令里能直接去掉连字符改成裸词的只有 `smoke-test`（拼成 `smoketest` 不撞车）；`session-name`/`trigger-compact` 直接去连字符会分别撞上 pi 自己文档化的 `/name`/`/session`、`/compact`。用户反馈：宁可造个新词，也别留连字符增加心智负担。
+
+**改动**：
+1. `session-name.ts`：命令名 `session-name` → `label`（文件名不变，跟 `custom-footer.ts` 注册 `/footer` 是同一个既有惯例）。
+2. `trigger-compact.ts`：命令名 `trigger-compact` → `recap`（取"续接着讲"的意思，呼应它跟内置 `/compact` 的区别——这个版本特意保连续性，不是单纯省 token）。
+3. `.pi/prompts/smoke-test.md` 重命名为 `.pi/prompts/smoketest.md`。
+4. 同步改了 `FORGE.md`、`README.md` 里所有活的命令引用；`design.md` 里描述"当时"发生了什么的历史段落原文不动，只在最初引入这几个命令的地方（§8 smoke-test 首次全链路跑通那段、§9.2 六个 extension 引入表格前）各加一条"后续变化"引用块指向这里。
+
+**明确没有做的**：没有为了单词化去改 `/plan`/`/todos`/`/footer`/`/handoff`（本来就是单词）或 `.pi/prompts/` 其余模板（全都已经是单词）；没有引入前缀/命名空间方案（如 `forge:xxx`）——那只是把连字符换成冒号，没有真正降低心智成本，直接造新词更直接。
 
 ---
 
