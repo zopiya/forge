@@ -3,29 +3,58 @@
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
  * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
- * Unmodified from upstream. Useful here because chain/parallel subagent
- * dispatch burns context fast (see .pi/design.md §7.1's cost model).
+ *
+ * Deviations from upstream (see .pi/design.md §22):
+ * - Threshold is a percentage of the model's actual context window
+ *   (`usage.percent`), not an absolute token count. Upstream's 100k-token
+ *   threshold doesn't scale with `contextWindow` — on a model with a
+ *   ~1M-token window it fired at ~10% usage instead of near the end of the
+ *   window. `ContextUsage.percent`/`.contextWindow` are already computed by
+ *   pi-core and exposed on the same object upstream reads `.tokens` from;
+ *   `.pi/extensions/custom-footer.ts` already consumes them, same pattern.
+ * - "Crossed threshold" (low→high transition) trigger logic replaced with a
+ *   `compactionPending` flag: still triggers if a session starts already
+ *   above threshold (upstream never does, a known bug — see the same
+ *   design.md section), and still won't double-trigger while a fire-and-
+ *   forget `ctx.compact()` call from a previous turn is still in flight.
+ * - Auto-triggered compactions now pass `customInstructions` biasing the
+ *   summarizer to preserve in-progress task state, so the session can pick
+ *   back up immediately after compaction instead of losing the thread.
+ *   Manual `/trigger-compact` behavior is unchanged.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-const COMPACT_THRESHOLD_TOKENS = 100_000;
+const COMPACT_THRESHOLD_PERCENT = 80;
+
+const CONTINUITY_INSTRUCTIONS =
+	"This compaction was auto-triggered mid-task, not at a natural stopping point. " +
+	"Preserve the in-progress task with maximum fidelity: what is currently being worked on, " +
+	"the exact next steps, and any TODO/checklist state, so work can resume immediately " +
+	"after compaction without re-deriving context.";
 
 export default function (pi: ExtensionAPI) {
-	let previousTokens: number | null | undefined;
+	// Whether we've already triggered a compaction for the current
+	// above-threshold episode. Set on trigger, cleared once usage drops
+	// back below threshold (compaction succeeded) or the compaction errors
+	// out (so the next turn can retry).
+	let compactionPending = false;
 
 	const triggerCompaction = (ctx: ExtensionContext, customInstructions?: string) => {
 		if (ctx.hasUI) {
 			ctx.ui.notify("Compaction started", "info");
 		}
+		compactionPending = true;
 		ctx.compact({
 			customInstructions,
 			onComplete: () => {
+				compactionPending = false;
 				if (ctx.hasUI) {
 					ctx.ui.notify("Compaction completed", "info");
 				}
 			},
 			onError: (error) => {
+				compactionPending = false;
 				if (ctx.hasUI) {
 					ctx.ui.notify(`Compaction failed: ${error.message}`, "error");
 				}
@@ -35,18 +64,19 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("turn_end", (_event, ctx) => {
 		const usage = ctx.getContextUsage();
-		const currentTokens = usage?.tokens ?? null;
-		if (currentTokens === null) {
+		const currentPercent = usage?.percent ?? null;
+		if (currentPercent === null) {
 			return;
 		}
 
-		const crossedThreshold =
-			previousTokens !== undefined && previousTokens !== null && previousTokens <= COMPACT_THRESHOLD_TOKENS;
-		previousTokens = currentTokens;
-		if (!crossedThreshold || currentTokens <= COMPACT_THRESHOLD_TOKENS) {
+		if (currentPercent < COMPACT_THRESHOLD_PERCENT) {
+			compactionPending = false;
 			return;
 		}
-		triggerCompaction(ctx);
+		if (compactionPending) {
+			return;
+		}
+		triggerCompaction(ctx, CONTINUITY_INSTRUCTIONS);
 	});
 
 	pi.registerCommand("trigger-compact", {
