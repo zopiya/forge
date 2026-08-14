@@ -109,7 +109,7 @@ Quality bar:
 
 ## Dispatch Responsibilities
 
-Forge doesn't have a separate agent per phase — see `AGENTS.md` for the full
+Forge doesn't have a separate agent per phase — see `.pi/FORGE.md` for the full
 routing table. For spec-driven work specifically:
 
 | Phase | Who does it |

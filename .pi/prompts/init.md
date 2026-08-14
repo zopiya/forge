@@ -1,16 +1,16 @@
 ---
-description: Generate or update this project's AGENTS.md (Forge's onboarding file, auto-loaded every session)
+description: Generate or update this project's own AGENTS.md (separate from Forge's own .pi/FORGE.md, which is injected automatically and never needs this command)
 argument-hint: "[focus]"
 ---
 
-Generate or update `AGENTS.md` for this project — the file `pi` auto-loads at the start of every session, Forge's equivalent of CLAUDE.md.
+Generate or update `AGENTS.md` for this project — the file `pi` auto-loads at the start of every session, Forge's equivalent of CLAUDE.md. This is entirely about *this project*, not Forge itself: Forge's own operating instructions live in `.pi/FORGE.md` and are injected into every turn automatically by `.pi/extensions/forge-core.ts` (see `.pi/design.md` §20) — nothing you write here can affect that, and nothing in `.pi/FORGE.md` needs repeating here.
 
 **Step 1 — Detect.**
 
 Check whether `AGENTS.md` already exists at the repo root.
 
-- **If it does not exist** (bootstrapping a fresh project onto the Forge methodology): go to Step 2, "Generate from scratch."
-- **If it already exists**: do NOT generate new content or attempt a "refresh" from scratch, even if asked to run `/init` again. `AGENTS.md` is a hand-authored, carefully-considered file — Forge's own is documented decision-by-decision in `.pi/design.md`. Go to Step 3, "Propose additions only," instead.
+- **If it does not exist**: go to Step 2, "Generate from scratch." This is the common case right after cloning the Forge template — Forge deliberately doesn't ship a root `AGENTS.md`, so this file is yours from the start.
+- **If it already exists**: do NOT generate new content or attempt a "refresh" from scratch, even if asked to run `/init` again. Once written, `AGENTS.md` is a hand-authored, carefully-considered file — treat it the same way regardless of whether a human or a previous `/init` run wrote it. Go to Step 3, "Propose additions only," instead.
 
 **Step 2 — Generate from scratch (only when `AGENTS.md` is absent).**
 
@@ -32,7 +32,7 @@ Check whether `AGENTS.md` already exists at the repo root.
 Inspect the repository before writing anything:
 
 1. Stack and structure: language(s), package manager, build/test/lint commands actually present (`package.json` scripts, `justfile`, `Makefile`, `pyproject.toml`, `Cargo.toml`, etc.) — report only what's evidenced, never invent a command.
-2. `.pi/` contents, if present: `.pi/agents/*.md` (dispatchable subagent roles), `.pi/extensions/*.ts` (hooks/commands), `.pi/skills/*/SKILL.md` (auto-loaded reference material), `.pi/prompts/*.md` (slash commands), `.pi/work/` (durable task-state convention).
+2. `.pi/` contents, if present: `.pi/agents/*.md` (dispatchable subagent roles), `.pi/extensions/*.ts` (hooks/commands), `.pi/skills/*/SKILL.md` (auto-loaded reference material), `.pi/prompts/*.md` (slash commands), `.pi/work/` (durable task-state convention). Ignore `.pi/FORGE.md` here — it's Forge's own file, not evidence about this project, and it's already loaded automatically regardless of what this command writes.
 3. `docs/` for any existing design-rationale or architecture document.
 4. Existing `README.md` for a plain-language description of what the project is/does.
 
@@ -43,11 +43,11 @@ Write `AGENTS.md` covering, in this order, each section only if the repository a
 - Session-start behavior, if `.pi/work/` exists: point at scanning it for incomplete `tasks.md`.
 - A routing/process table only if there's a real reason for one — don't invent one for a project that's just flat, single-session work.
 - Agents available for dispatch, if `.pi/agents/*.md` exists — one line each, pointing at the file rather than duplicating it.
-- Extensions available, if `.pi/extensions/*.ts` exists — one line each: command/trigger + one-sentence purpose.
+- Extensions available, if `.pi/extensions/*.ts` exists — one line each: command/trigger + one-sentence purpose. Skip `forge-core` — it's what loads `.pi/FORGE.md` itself, not something this file needs to explain.
 - Working style / code conventions actually evidenced by the repo (existing lint config, formatting, commit style from `git log`) — don't prescribe a style the repo doesn't already follow.
 - A pointer to `.pi/design.md` (or wherever rationale lives) if one exists, or a note that there isn't one yet.
 
-Keep it concise — this file loads every session, verbosity has an ongoing cost. Use Forge's own `AGENTS.md` (this repository, if visible) as a reference for *shape*, not content — a new project's file describes that project, not Forge.
+Keep it concise — this file loads every session, verbosity has an ongoing cost. Do **not** use `.pi/FORGE.md` as a shape reference — it's a different kind of document (Forge's own operating instructions, injected via extension, not read as a context file) and describes Forge, not this project. Routing/dispatch mechanics, Race mode, Non-negotiable constraints, and Forge's own extensions are already covered there — don't duplicate any of it here, even in summary.
 
 Show the generated content and ask for confirmation before writing `AGENTS.md`.
 

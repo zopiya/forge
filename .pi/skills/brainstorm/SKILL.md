@@ -5,7 +5,7 @@ description: Design thinking reference — architectural trade-offs, decompositi
 
 # Brainstorm
 
-Reference knowledge for structured design thinking. On exploratory or ideation-driven requests, apply this in-session (no code until the design is settled) — there's no separate "plan mode" to switch into; this skill loads on demand per AGENTS.md's routing table.
+Reference knowledge for structured design thinking. On exploratory or ideation-driven requests, apply this in-session (no code until the design is settled) — there's no separate "plan mode" to switch into; this skill loads on demand per `.pi/FORGE.md`'s routing table.
 
 ## Evaluating Approaches
 

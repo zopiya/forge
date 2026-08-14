@@ -56,7 +56,7 @@ artifacts blocking a plain remove, merged-vs-unmerged branch deletion) so
 callers don't each re-derive them. Meant for the same audience as `loop.sh`:
 external wrappers that need an isolated workspace without a pi process
 making the judgment calls (see the example above). Interactive pi sessions
-use it too, e.g. for Race mode (see AGENTS.md's "Race mode mechanics").
+use it too, e.g. for Race mode (see `.pi/FORGE.md`'s "Race mode mechanics").
 
 Run `.pi/scripts/worktree.sh --help` for the full command list. See
 `.pi/skills/worktree/SKILL.md` for when to reach for a worktree and the

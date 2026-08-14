@@ -23,7 +23,7 @@
  *   Windows-style paths too.
  *
  * Deliberately no confirmation prompt — this is a silent hard block, not the
- * "confirm before destructive action" guardrail AGENTS.md's "Non-negotiable"
+ * "confirm before destructive action" guardrail .pi/FORGE.md's "Non-negotiable"
  * section/§3.4 already decided against. The container boundary doesn't undo
  * a secret that already made it into a commit/push; that's the specific gap
  * this closes.

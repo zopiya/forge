@@ -59,7 +59,7 @@ pi 作者的核心论点（有充分证据支撑，不是臆测）：
 - 用 `APPEND_SYSTEM.md` 而非完全替换默认系统提示——保留 pi 默认提示对模型行为的既有校准，只追加我们的强约束，不重新发明一遍"你是个 coding agent"。
 - **诚实声明边界**：这套假设的前提是"容器化默认"。如果哪天在裸机、没有沙箱的机器上直接跑 Forge，这里没有兜底——这是刻意取舍，不是遗漏，写在这里是为了不让未来的自己踩坑。
 
-### 3.2 AGENTS.md → 直接复用 pi 原生机制
+### 3.2 AGENTS.md → 直接复用 pi 原生机制（§20：Forge 自己那部分内容后来搬去了 `.pi/FORGE.md`，AGENTS.md 交还给项目，见 §20）
 
 - pi 原生支持 `~/.pi/agent/AGENTS.md`（全局）→ 父目录级联 → 当前目录，命名和语义与 Conductor 现状完全一致。
 - 原 Conductor 的 `AGENTS.md`（全局助手行为 + agent registry 总览）可以**近乎原样迁移**，只需把 opencode 专属的路由描述换成 pi 的 dispatch 工具说明。
@@ -701,7 +701,7 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 **决定**：维持现状——prompt 留 prompt，`worktree.sh`/`loop.sh` 留外部脚本。以后如果冒出具体的能力缺口（运行时事件钩子、给 model 暴露可直接调用的工具等），按需为那一个缺口单独评估要不要加 extension，不做批量转换。
 
-## 16. `APPEND_SYSTEM.md` 根本没生效——查证后砍掉，内容并进 `AGENTS.md`
+## 16. `APPEND_SYSTEM.md` 根本没生效——查证后砍掉，内容并进 `AGENTS.md`（§20：这批内容后来又从 AGENTS.md 搬进了 `.pi/FORGE.md`，AGENTS.md 交还给项目，见 §20）
 
 有人问"要不要砍掉 `APPEND_SYSTEM.md`，反正 AI 也不会主动去读它"，这个直觉部分对、但说的不是真正的机制问题——去查了 pi 自己的文档（`docs/usage.md`/`docs/security.md`）才发现一个更根本的 bug：
 
@@ -710,7 +710,7 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 **决定**：不修路径，直接把 `APPEND_SYSTEM.md` 的三条硬约束（不编造结果、如实报告失败、不确定时明说）和容器化前提的免责声明，原文并进 `AGENTS.md` 开头新增的"Non-negotiable"小节，删掉 `APPEND_SYSTEM.md` 本体。理由：既然要重新选路径，AGENTS.md 本来就已经是"pi 保证会加载、不看 project trust"的机制，比修好路径后的 system prompt 文件更可靠，没有理由为了"system prompt 位置更靠底层、模型更难被后续指令覆盖"这一点理论优势，去继续维护一个实际上更脆弱、还得额外记住"这玩意必须放在 `.pi/` 里面"的独立文件。同步更新了所有指向它的地方：`README.md`、`.pi/extensions/protected-paths.ts` 头部注释、`.pi/prompts/smoke-test.md`。§3.1/§4 的原始草案记录保留，作为"当初为什么选 APPEND_SYSTEM.md"的历史决策，不回改。
 
-## 17. 项目瘦身：砍掉 `.pi/audit/`、删掉 "loop until X"、引入 Forger 身份
+## 17. 项目瘦身：砍掉 `.pi/audit/`、删掉 "loop until X"、引入 Forger 身份（§20：Identity 这部分内容后来也搬进了 `.pi/FORGE.md`，见 §20）
 
 `APPEND_SYSTEM.md` 那次清理之后，提出了一个更大的问题——整体做减法。查证了两个具体疑点，另外单独定了一个风格决定。
 
@@ -729,7 +729,7 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 - `.github/workflows/lint.yml` 的 `typecheck` job 加 `defaults.run.working-directory: .pi`，`bun install --frozen-lockfile`/`bun run typecheck` 都在 `.pi/` 里跑；本地对应命令变成 `cd .pi && bun run typecheck`。`json` job 不用改——它本来就分别扫 `.pi/**/*.json` 和仓库根目录，三个文件挪进 `.pi/` 之后自动落进前一半的扫描范围。
 - 实测方式跟 §9.13/§10.5/§14 一致：删掉根目录残留的 `node_modules/`，在 `.pi/` 里跑一次真正干净的 `bun install --frozen-lockfile && bun run typecheck`，确认能从零装好、typecheck 照常通过，不是"看起来对"。
 
-## 19. `README.md`/`docs/design.md` 也挪进 `.pi/`，仓库根目录只留 `AGENTS.md`
+## 19. `README.md`/`docs/design.md` 也挪进 `.pi/`，仓库根目录只留 `AGENTS.md`（§20：连 `AGENTS.md` 后来也不留了，见 §20）
 
 §18 挪完 `package.json`/`tsconfig.json`/`bun.lock` 之后，同一个逻辑继续往下推：`README.md`（本来在根目录，GitHub 会渲染成仓库主页）和 `docs/design.md`（本文档）一样是 Forge 自己的东西，不是被开发项目的内容，理应跟 `.pi/skills`、`.pi/extensions` 放在同一个命名空间下，不占用留给被开发项目的根目录。
 
@@ -738,6 +738,25 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 全仓库 25 处引用 `docs/design.md` 的地方（`AGENTS.md`、CI 脚本、所有 `.pi/agents/*.md`、`.pi/extensions/*.ts`、`.pi/scripts/*`、部分 `.pi/prompts/*.md`）全部同步改成 `.pi/design.md`；本文档内部历史条目里提到的 `docs/usage.md`/`docs/security.md` 字样是 pi 自己上游文档的路径（`@earendil-works/pi-coding-agent` 包内），跟 Forge 的 `docs/` 目录无关，没有改。
 
 这次改动是 §17（`.pi/audit` 整个砍掉）之后同一次"整体做减法"要求的延续，也是对 §16 之前发现的"根目录不该被 Forge 自己的文件占用"这条原则（§18 已经点出）最后一次收尾——收尾之后，`AGENTS.md` 是 pi clone 这个模板之后**唯一**会自动发现、且必须留在根目录的 Forge 文件。
+
+## 20. `AGENTS.md` 交还给项目，Forge 自己的运作说明搬进 `.pi/FORGE.md`，靠 extension 注入 system prompt
+
+§19 把根目录清到只剩 `AGENTS.md` 之后，冒出一个更根本的问题：现在 `AGENTS.md` 里几乎全部内容——Identity、Non-negotiable、Routing、Race mode mechanics、dispatch 调用格式、Extensions available——都是"Forge 怎么运作"的说明，不是"这个项目是什么"。这些说明**只存在这一份文件里**，没有备份。`.pi/agents/*.md`、`.pi/extensions/subagent/`、`worktree.sh` 这些机制本身还在磁盘上，但如果有人把 `AGENTS.md` 手动清空重写成纯项目描述（不是通过 `/init`，就是直接编辑），模型就再也不知道"How to actually dispatch"要传 `agentScope: "both"`、Race mode 要建 worktree——这些知识全靠这一份文件的文字，pi 不会去别处找。`/init` 现在的保护（Step 3 只提议新增、从不重写删除）只挡得住 `/init` 自己，挡不住人直接拿编辑器改。
+
+**先排除了两条路**：
+- pi 的 context file 级联（`~/.pi/agent/AGENTS.md` 全局 → 祖先目录 → 当前目录）没有"这批项目共享、又不是全机器全局"的中间层级——唯一比"当前目录"更靠前的位置是 `~/.pi/agent/AGENTS.md`，那是**整台机器上所有 pi 会话**都会加载的，会把 Forger 人格和 Forge 路由表带到所有不相关的项目里，用户明确不要这个。
+- 查了 `.pi/settings.json` 的完整字段表（`packages`/`extensions`/`skills`/`prompts`/`themes` 可配路径/顺序）——没有 `contextFiles` 或等价字段，AGENTS.md/SYSTEM.md 的加载完全是硬编码路径，settings.json 管不到，不存在"opencode 那种项目级 config 控制加载顺序"这条路。
+
+**真正能用的机制**：pi 的 extension API 有 `before_agent_start` 事件——"Fired after user submits prompt, before agent loop. Can inject a message and/or modify the system prompt"，返回 `{ systemPrompt: ... }` 能在**每一轮**无条件修改最终拼出来的 system prompt，跟 `session_start` 配合就是官方示例 `claude-rules.ts` 的模式（`session_start` 读一次文件，`before_agent_start` 每轮追加）。这条链路不依赖 AGENTS.md 的内容，也不依赖 AGENTS.md 是否存在。
+
+**决定**：
+- 新增 `.pi/FORGE.md`——原来 `AGENTS.md` 里除了纯粹随项目变化的那一小撮（其实一条都没有，全部内容都是 Forge 自己的运作说明）之外的全部内容原样搬过去。
+- 新增 `.pi/extensions/forge-core.ts`（从零写，不是 vendor——upstream 没有现成对应物，`claude-rules.ts` 只是最接近的先例，且它只追加一份"可用规则文件列表"让模型自己按需 `read`，不是直接注入全文）：`session_start` 时读一次 `.pi/FORGE.md` 缓存内容，`before_agent_start` 每轮**往前拼**（`FORGE.md 内容 + "\n\n---\n\n" + event.systemPrompt`，不是往后拼）进最终 system prompt。往前拼是刻意的，不是美观选择——查了编译后的源码（`dist/core/extensions/loader.js`）确认 `.pi/extensions/` 目录扫描用的是没排序的 `fs.readdirSync`，pi 不承诺同目录里谁先加载；但确认了 Forge 现有 extension 里只有 `plan-mode` 用到 `before_agent_start`，且只注入 `message`、从不碰 `systemPrompt`，所以往前拼这个字符串操作本身就能保证 Forge 的内容出现在最终 prompt 的最前面，不需要也没法真正控制"注册顺序"。
+- 根目录 `AGENTS.md` 直接不随模板提供（`git rm`，不留占位符）。`/init` 的 Step 1 本来就是"文件不存在 → Step 2 从零生成"，不用改逻辑，只改了旁白：不再说"Forge 自己的 AGENTS.md 是怎样"，因为不存在这回事了；Step 2 加了一条明确指示——检查 `.pi/` 内容时**跳过** `.pi/FORGE.md`，别把它当"项目证据"，也别拿它当"生成新 AGENTS.md 的排版参考"，那是完全不同性质的文件（Forge 自己的运作说明，靠 extension 注入，不是 context file）。
+
+**测试方式**：写了一段 mock（假 `pi.on` 收集 handler、假 `ctx.cwd`、假 `event.systemPrompt`），不用真跑 pi 会话就验证了四种情况：`session_start` 触发前 `before_agent_start` 正确 no-op；触发后正确读到真实 `.pi/FORGE.md`、往前拼、内容包含 `Non-negotiable`/`Race mode mechanics`、结尾正好是原始 `BASE_PROMPT`；`cwd` 下没有 `.pi/FORGE.md` 时优雅 no-op，不抛错。`bun run typecheck` 过。另外在 `.pi/prompts/smoke-test.md` Phase 0 加了一步（新 step 3）：直接问模型自己的 Identity 是不是 "Forger"、不许现查文件——这是以后每次真实跑 smoke test 时验证这条注入链路仍然生效的真实测试，不是纸面审查。
+
+同步更新了所有指向 `AGENTS.md`"Forge 自己的部分"的地方，改成指向 `.pi/FORGE.md`：`.pi/README.md`、`.pi/extensions/protected-paths.ts`、`.pi/scripts/README.md`、`.pi/prompts/{retro,smoke-test}.md`、`.pi/skills/{spec-driven,brainstorm,worktree,git}/SKILL.md`。`.pi/prompts/{readme,init}.md`、`.pi/skills/project-layout/SKILL.md` 里提到 "AGENTS.md" 的地方留着没动——那些说的是"项目自己的 AGENTS.md"这个通用概念，跟 Forge 自己的文件无关。
 
 ---
 

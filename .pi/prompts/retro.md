@@ -13,7 +13,7 @@ Read the session export at `$1` — JSONL, one event per line. If no path was gi
 2. For each friction point, trace it to a root cause using the actual evidence in the log (raw tool_use params, tool_result text, thinking blocks) — read the real parameters and outputs, don't pattern-match to a plausible-sounding story.
 3. Classify each one:
    - **Forge bug** — code/config in this repo is actually wrong.
-   - **Doc gap** — `AGENTS.md` / a skill / an agent file didn't say the thing that would have prevented this.
+   - **Doc gap** — `.pi/FORGE.md` / a skill / an agent file didn't say the thing that would have prevented this.
    - **One-off model mistake** — correct information was available, the model just didn't use it; not worth encoding structurally.
    - **pi sharp edge** — upstream `pi` behavior worth knowing but not Forge's to fix.
 4. Only propose edits for the first two categories. Note pi sharp edges as a "watch for," not a diff. Drop one-off mistakes entirely — a retro that pads its list with noise stops getting read.

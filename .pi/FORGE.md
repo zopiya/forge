@@ -1,6 +1,6 @@
 # Forge
 
-You are running inside **Forge** — a pure-dev coding agent setup for [pi](https://pi.dev). This file loads automatically; read it before doing anything else.
+You are running inside **Forge** — a pure-dev coding agent setup for [pi](https://pi.dev). This file's content is injected straight into your system prompt, every turn, by `.pi/extensions/forge-core.ts` — you don't need to go read it, it's already part of your instructions before you see the user's message. It is deliberately separate from the project's own root-level `AGENTS.md`: that file describes whatever's actually being built here and is left entirely to the user (see `.pi/design.md` §20) — nothing in it can break how Forge itself operates, because none of the mechanics below come from there.
 
 ## Non-negotiable
 
@@ -126,10 +126,11 @@ Race needs two or more *real* implementations to compare, which means real file 
 
 ## Extensions available
 
-Beyond `subagent`, `.pi/extensions/` has nine more extensions vendored from pi upstream, plus one written for Forge from scratch (`doom-loop-guard`, see below). Most are feature/UX additions, not guardrails — Forge runs in a container/Codespaces already, see the assumptions above — except `protected-paths`/`dirty-repo-guard`/`doom-loop-guard`, which are narrow safety nets for risks the container boundary specifically doesn't cover (see their entries below for why each doesn't reopen the "confirmation popup" question §3.4 already closed). Rationale and any deviations from upstream are in `.pi/design.md` §9.
+Beyond `subagent`, `.pi/extensions/` has nine more extensions vendored from pi upstream, plus two written for Forge from scratch (`doom-loop-guard` and `forge-core`, see below). Most are feature/UX additions, not guardrails — Forge runs in a container/Codespaces already, see the assumptions above — except `protected-paths`/`dirty-repo-guard`/`doom-loop-guard`, which are narrow safety nets for risks the container boundary specifically doesn't cover (see their entries below for why each doesn't reopen the "confirmation popup" question §3.4 already closed). Rationale and any deviations from upstream are in `.pi/design.md` §9.
 
+- `forge-core` (no command — hooks `session_start`/`before_agent_start`) — reads this file and injects it into your system prompt every turn. Written for Forge from scratch, see `.pi/design.md` §20 for why this exists instead of relying on the project's `AGENTS.md`.
 - `/plan` (or `--plan` flag, or Ctrl+Alt+P) — toggles read-only plan mode: write tools off, bash restricted to a read-only allowlist, agent produces a numbered `Plan:` before touching anything. Use for the "multi-phase, one sitting, doesn't need to survive a restart" row in the routing table above — lighter than a `.pi/work/` directory, more structured than a bare conversational TODO. `/todos` shows progress on the current plan. Plan mode's own prompt tells the agent to ask clarifying questions with the `questionnaire` tool — that tool is `.pi/extensions/questionnaire.ts`, vendored alongside it for exactly this dependency; it adds no command of its own.
-- `/footer` — toggles a custom status footer, deliberately minimal after several rounds of "still not right" — see .pi/design.md §9.10 (a "car dashboard": only what you'd actually glance at, not a stats page). Two things, left/right padded to terminal width:
+- `/footer` — toggles a custom status footer, deliberately minimal after several rounds of "still not right" — see `.pi/design.md` §9.10 (a "car dashboard": only what you'd actually glance at, not a stats page). Two things, left/right padded to terminal width:
   - Left (identity — "where"): `<cwd> on <branch> <session-name>` — branch bold + accent, branch/session-name only appear when set.
   - Right (context window — the one gauge that matters): `<tokens>/<window> (<percent>%)` — colored success under 70%, warning past 70%, error past 90%, same data source and thresholds (`ctx.getContextUsage()`) pi's own built-in footer uses. Predicts when compaction fires. Model id, cost, token counts, cache hit rate, session duration, and a clock were all tried across §9.4–§9.9 and cut here — diagnostic detail, not dashboard-core; see §9.10 for the reasoning on each.
 - `/session-name [name]` — names the current session so it's identifiable in the session selector instead of showing the first message, and shows in the footer above. Useful paired with `.pi/work/<feature-slug>` when multiple sessions are running across worktrees.
@@ -160,7 +161,7 @@ Applies regardless of task:
 - Universal code style regardless of language: functions ≤40 lines (>60 is a signal to split), self-documenting names, no magic numbers, delete dead code instead of commenting it out, no trailing whitespace.
 - Match existing project conventions (formatting, commit style, test layout) over introducing new ones.
 - Branch policy and commit discipline: see `.pi/skills/git/SKILL.md` — check current branch before any commit/merge/push, `main` is never committed to directly.
-- Prefer `/commit`, `/changelog`, `/readme`, `/status`, `/init`, `/btw`, `/release` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time. `/init` generates/updates `AGENTS.md` for a project (idempotent — never blindly overwrites a hand-authored one). `/btw <question>` answers a quick aside without touching the current task/plan state. `/release` chains version bump → changelog → tag → GitHub release → deploy, detecting which of `.pi/skills/{github,cloudflare,docker,ansible}/` actually applies to this project rather than assuming.
+- Prefer `/commit`, `/changelog`, `/readme`, `/status`, `/init`, `/btw`, `/release` (see `.pi/prompts/`) for their respective repetitive tasks instead of freehanding them differently each time. `/init` generates/updates the project's own `AGENTS.md` (idempotent — never blindly overwrites a hand-authored one; see that file's own header for the project/Forge split). `/btw <question>` answers a quick aside without touching the current task/plan state. `/release` chains version bump → changelog → tag → GitHub release → deploy, detecting which of `.pi/skills/{github,cloudflare,docker,ansible}/` actually applies to this project rather than assuming.
 - `.github/workflows/lint.yml` typechecks `.pi/extensions/*.ts` (`cd .pi && bun run typecheck` — same command locally; the `package.json`/`tsconfig.json`/`bun.lock` behind it live in `.pi/`, not the repo root, on purpose — see `.pi/design.md` §18), and syntax/shape-checks scripts, JSON, and prompt/skill frontmatter. This is mechanical hygiene, not a substitute for actually running something before calling it done — see `.pi/design.md` §13.
 
 ## `.pi/work/` — durable task state
@@ -173,4 +174,4 @@ For a goal that should keep getting reattempted on a schedule with nobody watchi
 
 ## Design rationale
 
-The reasoning behind every decision here — why no MCP, why no default guardrail, why Synapse became plain files, why 8 roles became 4 — lives in `.pi/design.md`. Read it before changing any of the above.
+The reasoning behind every decision here — why no MCP, why no default guardrail, why Synapse became plain files, why 8 roles became 4, why this file is separate from the project's own `AGENTS.md` — lives in `.pi/design.md`. Read it before changing any of the above.

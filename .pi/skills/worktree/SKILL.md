@@ -14,7 +14,7 @@ be able to leave the caller's own checkout on the wrong branch.
 ## When to use one
 
 - **Race mode** — comparing two or more real parallel implementations; see
-  AGENTS.md's "Race mode mechanics". This is the one case dispatch `cwd`
+  `.pi/FORGE.md`'s "Race mode mechanics". This is the one case dispatch `cwd`
   exists for (`.pi/agents/builder.md` is only ever dispatched into a
   worktree).
 - **Inspecting another branch without disturbing local changes** — instead
