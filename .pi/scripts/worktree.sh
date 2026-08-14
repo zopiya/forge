@@ -2,14 +2,15 @@
 # .pi/scripts/worktree.sh — small, reusable git-worktree mechanism.
 #
 # git worktree is a core, repeatedly-used concept in Forge (Race mode,
-# isolated audit/loop runs, general "inspect a branch without disturbing
-# local changes"), but the raw `git worktree` commands carry real gotchas
-# (remove takes exactly one path per call, leftover build artifacts make
-# plain remove refuse, merged vs unmerged branches need -d vs -D). This
-# script is the one place those gotchas are encoded so every consumer —
-# an interactive pi session running Race mode, or an external wrapper like
-# .pi/audit/run.sh driving .pi/scripts/loop.sh — calls the same thing
-# instead of each re-deriving the commands by hand. See
+# isolated unattended loop runs, general "inspect a branch without
+# disturbing local changes"), but the raw `git worktree` commands carry
+# real gotchas (remove takes exactly one path per call, leftover build
+# artifacts make plain remove refuse, merged vs unmerged branches need -d
+# vs -D). This script is the one place those gotchas are encoded so every
+# consumer — an interactive pi session running Race mode, or an external
+# wrapper driving .pi/scripts/loop.sh (see .pi/scripts/README.md for a
+# worked example) — calls the same thing instead of each re-deriving the
+# commands by hand. See
 # .pi/skills/worktree/SKILL.md for the reference knowledge (when to use a
 # worktree, naming convention) and docs/design.md §14 for the rationale.
 #

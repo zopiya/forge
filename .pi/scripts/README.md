@@ -20,10 +20,30 @@ only) rather than being special-cased inside the engine.
 
 Run `.pi/scripts/loop.sh --help` for the full option list.
 
-See `.pi/audit/run.sh` for a real example: it owns everything audit-specific
-and calls this engine to do the actual looping. To make pi keep working
-toward a *different* goal on a schedule, write a new prompt (or reuse an
-existing one) and call `loop.sh` directly — no new while loop needed.
+Example — wrapping some recurring goal (say, a nightly cleanup pass) in its
+own isolated worktree instead of running unattended against whatever
+checkout is currently open:
+
+```bash
+WT="../$(basename "$PWD")-nightly-$(date +%Y-%m-%d)"
+BRANCH="chore/nightly-$(date +%Y-%m-%d)"
+.pi/scripts/worktree.sh add "$WT" "$BRANCH"
+
+.pi/scripts/loop.sh \
+  --prompt "/some-recurring-task" \
+  --until 04:00 --max-rounds 7 \
+  --cwd "$WT" \
+  --precheck "cd '$WT' && [ -z \"\$(git status --porcelain)\" ]" \
+  --post-round-check "cd '$WT' && [ -z \"\$(git status --porcelain)\" ]"
+
+[ -z "$(git -C "$WT" status --porcelain)" ] && .pi/scripts/worktree.sh remove "$WT"
+```
+
+That's the whole pattern: a wrapper owns the domain-specific setup (branch,
+worktree, dirty-tree gating), `loop.sh` owns the bounded repetition. Write a
+new prompt, adjust the `--precheck`/`--post-round-check` commands, and this
+same handful of lines covers any other unattended goal — no new `while` loop
+needed.
 
 Rationale for why this lives outside pi entirely (not an extension/timer) is
 in `docs/design.md` §10.3/§10.5.
@@ -35,10 +55,8 @@ the gotchas that come with them (single-path removal, leftover build
 artifacts blocking a plain remove, merged-vs-unmerged branch deletion) so
 callers don't each re-derive them. Meant for the same audience as `loop.sh`:
 external wrappers that need an isolated workspace without a pi process
-making the judgment calls — `.pi/audit/run.sh` uses it to give the nightly
-audit branch its own worktree instead of switching branches in whatever
-checkout happens to be current. Interactive pi sessions use it too, e.g. for
-Race mode (see AGENTS.md's "Race mode mechanics").
+making the judgment calls (see the example above). Interactive pi sessions
+use it too, e.g. for Race mode (see AGENTS.md's "Race mode mechanics").
 
 Run `.pi/scripts/worktree.sh --help` for the full command list. See
 `.pi/skills/worktree/SKILL.md` for when to reach for a worktree and the

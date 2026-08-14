@@ -12,8 +12,9 @@
 # whether a round's result was good) does NOT belong in here — plug it in
 # via --precheck/--post-round-check instead, or drive the loop from a
 # thin wrapper script that does its own setup and then calls this one.
-# See .pi/audit/run.sh for exactly that pattern: a real wrapper built on
-# top of this engine, entirely in the audit domain.
+# See .pi/scripts/README.md for exactly that pattern: a worked example of
+# a wrapper built on top of this engine, entirely outside the engine
+# itself.
 #
 # Deliberately outside pi itself: extension factories must not start
 # background resources/timers (see pi's extensions.md); this mirrors the

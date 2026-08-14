@@ -20,10 +20,10 @@ be able to leave the caller's own checkout on the wrong branch.
 - **Inspecting another branch without disturbing local changes** — instead
   of `git stash` + `git checkout` + `git checkout -` + `git stash pop`.
 - **A scripted or scheduled process that writes to the repo** — e.g. an
-  external loop driven by `.pi/scripts/loop.sh` (see `.pi/audit/run.sh` for
-  a real example): give it its own worktree so it never touches the branch
-  the human is actively on, and a bad run can't corrupt anything outside
-  its own directory.
+  external loop driven by `.pi/scripts/loop.sh` (see `.pi/scripts/README.md`
+  for a worked example): give it its own worktree so it never touches the
+  branch the human is actively on, and a bad run can't corrupt anything
+  outside its own directory.
 
 ## How
 
@@ -37,7 +37,7 @@ worktree.sh list
 ```
 
 Naming convention: `../<repo>-<purpose>-<label>`, e.g. `../forge-race-a`,
-`../forge-audit-2026-08-14` — sibling of the main checkout, not nested
+`../forge-nightly-2026-08-14` — sibling of the main checkout, not nested
 inside it.
 
 ## Gotchas
