@@ -12,6 +12,7 @@ A pure-dev coding agent setup for [pi](https://pi.dev). Clone this as a template
 - `.pi/extensions/doom-loop-guard.ts` — the one extension here that isn't vendored. Written for Forge from scratch (see `docs/design.md` §9.12): blocks a tool call once it repeats identically three times in a row, a minimal circuit breaker for the agent getting stuck in a loop.
 - `.pi/prompts/` — `/commit`, `/changelog`, `/readme`, `/status`, `/retro`, `/smoke-test`: prompt templates for the repetitive stuff. `/retro` mines an exported session log for real friction points and turns them into doc fixes; `/smoke-test` exercises every mechanism (routing, dispatch, Race, spec-driven, prompt templates) in one session, for use before/after a real container run — see `docs/design.md` §8.
 - `.pi/work/` — durable state for tasks that need to survive a session restart (see `.pi/work/README.md`). Empty by default here; each project derived from this template accumulates its own as it goes.
+- `.pi/package.json`/`.pi/tsconfig.json`/`.pi/bun.lock` — Forge's own CI tooling, just for typechecking `.pi/extensions/*.ts`. Deliberately scoped inside `.pi/`, not the repo root, so they never collide with whatever `package.json`/`tsconfig.json` the project you build here ends up needing at the top level — see `docs/design.md` §18.
 - `docs/design.md` — the full design rationale: what this replaced, why, and what got deliberately left out.
 
 ## Assumptions baked in
@@ -19,6 +20,7 @@ A pure-dev coding agent setup for [pi](https://pi.dev). Clone this as a template
 - Runs inside a container (GitHub Codespaces, a devcontainer, or equivalent) — there's no destructive-action confirmation layer because the container boundary already provides real isolation. See `docs/design.md` §3.1/§3.4 if that assumption doesn't hold for where you're actually running this.
 - Pure dev scope — coding, debugging, testing, deploying. Not a general assistant.
 - Model/provider per agent profile is left unconfigured on purpose (commented out in each `.pi/agents/*.md`) — pick one when you actually set this up for a project.
+- The repo root is reserved for the project you build here, not for Forge's own tooling — everything Forge owns lives under `.pi/` (or `docs/`), so cloning this template and immediately scaffolding your actual app at the root doesn't fight with anything already there.
 
 ## Status
 

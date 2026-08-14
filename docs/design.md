@@ -663,7 +663,7 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 同时是纯 prompt template，没有写 extension——跟 `/init`/`/btw`/`/audit` 一样的判断：这是一套按顺序读文件、跑命令、问确认的流程，不需要状态管理或工具级拦截，prompt template 够用。
 
-## 13. `.github/workflows/lint.yml` —— 把手动验证里能自动化的部分自动化
+## 13. `.github/workflows/lint.yml` —— 把手动验证里能自动化的部分自动化（§18：`package.json`/`tsconfig.json`/`bun.lock` 后来挪进了 `.pi/`，见 §18）
 
 §9.13/§10.5 反复出现同一个模式："这个仓库没有自动化测试框架，验证靠手动跑一遍（`bun -e`、假 `pi` shim、真实跑一次 session）"。这本身没问题——extension/prompt/脚本这些东西确实没有官方测试框架能单元测——但"手动"和"每次改动都真的记得跑"是两件事，后者会随时间衰减。这次加的 CI 只自动化其中机械、无需判断力的那部分，不是要取代 §9.13/§10.5 那套真人验证方法：
 
@@ -719,6 +719,15 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 **"loop until X" 删掉**：查证发现它跟 `loop.sh` 根本不是同一件事、也不是被取代的关系——"loop until X" 全仓库只有两处提及（`AGENTS.md`/本文档 §3.7 各一行），没有任何代码支撑"cap at 3 rounds"，纯粹指望模型自己记住；`doom-loop-guard.ts` 管的是"连续 3 次完全相同的 tool call"，跟它不是一回事；时间线上它是从 Forge 之前 Conductor 时代的 `meta.md` 原样保留下来的路由触发词（§3.7，最早期），比 `loop.sh`（§10.5/§14，晚得多）早得多，两边在本文档里从未互相提过；`smoke-test.md` 的 16 步里也没有一步测过它。结论：不是被 `loop.sh` 取代（两者范围本来就不重叠——一个是对话内的有限重试，一个是外部无人值守的长期重试），而是它自己从落地起就没有任何东西支撑其存在、也从未被验证过，直接从 `AGENTS.md` 的 manual triggers 表里删掉，不额外写区分说明。
 
 **引入 Forger 身份**：在 `AGENTS.md` 新增 "Identity" 小节，agent 在这个仓库里自称 **Forger**，日常对话（自我介绍、footer、session 命名、普通回复）里自然使用，不只是被问"你是谁"才提。刻意选了克制版语气——不堆锻造/打磨类比喻，不写成一整套人格设定——避免跟 §2 "系统提示应该精简，赌前沿模型已经'懂'角色，不需要冗长说教" 这条已确认的原则冲突；commit message、PR 描述保持中性专业，不带人格化措辞，因为那是项目历史记录，不是对话。
+
+## 18. `package.json`/`tsconfig.json`/`bun.lock` 从仓库根目录挪进 `.pi/`
+
+§13 加 CI typecheck 时把这三个文件放在了仓库根目录，当时的理由是"只是为了让 `tsc` 能 resolve 类型定义，不是要把 Forge 变成 npm 项目"——但没考虑到 Forge 自己的定位：README 第一句话就是"Clone this as a template to start a new project"，根目录不是 Forge 独占的空间，是**留给被开发项目自己的**。这三个文件杵在根目录，会跟被开发项目自己的根级 manifest 直接撞路径（尤其是起一个 TS/Node 项目的时候），起非 JS 项目（Rust/Python）时则是一堆无关的噪音——`.pi/skills/project-layout/SKILL.md` 自己就写着"大多数工具默认在仓库根目录找自己的配置，不要为了整洁挪动它们"，这条规则是给被开发项目的根文件用的，前提是根目录本来就该是它们的地盘，而不是被 Forge 自己的 CI 工具链占着。
+
+**决定**：三个文件挪进 `.pi/package.json`/`.pi/tsconfig.json`/`.pi/bun.lock`，跟 `.pi/skills`、`.pi/extensions` 等其他 Forge 自有机制放在同一命名空间下，根目录彻底让给被开发项目。同步改动：
+- `tsconfig.json` 的 `include` 从 `.pi/extensions/**/*.ts` 改成相对新位置的 `extensions/**/*.ts`。
+- `.github/workflows/lint.yml` 的 `typecheck` job 加 `defaults.run.working-directory: .pi`，`bun install --frozen-lockfile`/`bun run typecheck` 都在 `.pi/` 里跑；本地对应命令变成 `cd .pi && bun run typecheck`。`json` job 不用改——它本来就分别扫 `.pi/**/*.json` 和仓库根目录，三个文件挪进 `.pi/` 之后自动落进前一半的扫描范围。
+- 实测方式跟 §9.13/§10.5/§14 一致：删掉根目录残留的 `node_modules/`，在 `.pi/` 里跑一次真正干净的 `bun install --frozen-lockfile && bun run typecheck`，确认能从零装好、typecheck 照常通过，不是"看起来对"。
 
 ---
 
