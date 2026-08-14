@@ -45,6 +45,10 @@ this is the TypeScript-specific idiom it defers to.
 - Cloudflare Workers projects: see `.pi/skills/cloudflare/SKILL.md` — the
   `wrangler.toml`/`.jsonc` config lives at the project root regardless of
   where `src/` conventions above put everything else.
+- React admin/dashboard apps built with Ant Design: see
+  `.pi/skills/ant-design/SKILL.md` — component conventions, pinned
+  versions, and page/layout scaffolding live there, this section only
+  covers the generic `src/` layout.
 
 ## Decision Rules
 
