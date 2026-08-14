@@ -98,10 +98,10 @@ Three shapes:
 
 Race needs two or more *real* implementations to compare, which means real file writes — dispatching `builder` in parallel into the **same** working directory would have both processes racing on the same files. `cwd` per task is what avoids that:
 
-1. Create one git worktree per variant off the current branch: `git worktree add ../<repo>-race-<label> -b race/<slug>-<label>`.
+1. Create one git worktree per variant off the current branch: `.pi/scripts/worktree.sh add ../<repo>-race-<label> race/<slug>-<label>`.
 2. Parallel-dispatch `builder`, one task per variant, each with `cwd` pointing at its own worktree: `{ tasks: [{ agent: "builder", task: "<approach A>", cwd: "../<repo>-race-a" }, { agent: "builder", task: "<approach B>", cwd: "../<repo>-race-b" }], agentScope: "both", confirmProjectAgents: false }`.
 3. Compare results — diffs, what each builder verified, trade-offs reported. Dispatch `reviewer` against each worktree (`cwd` set the same way) if an independent judgment is worth it.
-4. Once a winner's picked: merge/cherry-pick its branch into the real one, then remove each worktree — `git worktree remove <path>` takes exactly one path per call, run it once per variant (including the winner's worktree once merged), don't leave them lying around. A dispatched `builder` running tests/builds typically leaves untracked artifacts behind (e.g. `__pycache__/`) that make plain `remove` refuse — check `git status` in the worktree first; `--force` is fine once you've confirmed it's only build/test byproducts, not real uncommitted work. Then delete the branches: the winner's is merged, `git branch -d` works; the loser's is not, that needs `git branch -D`.
+4. Once a winner's picked: merge/cherry-pick its branch into the real one, then remove each worktree with `.pi/scripts/worktree.sh remove <path> [--force] --delete-branch` — run it once per variant (including the winner's worktree once merged), don't leave them lying around. See `.pi/skills/worktree/SKILL.md` for the gotchas that script encodes (single-path removal, when `--force` is actually safe, `-d` vs `-D` branch deletion).
 5. If this Race was big enough to warrant a `.pi/work/<slug>/` directory, record the comparison and the decision in it before cleanup.
 
 ## Extensions available
@@ -149,7 +149,7 @@ See `.pi/work/README.md` for the file convention and naming rule, and the routin
 
 ## `.pi/audit/` — overnight audit loop state
 
-An external OS-level scheduler (launchd/cron, not a pi extension) drives `.pi/audit/run.sh` through a bounded midnight–4am window, each round spawning an independent `pi -p "/audit"` process that picks the least-recently-covered area from `.pi/audit/log.md`, fixes clear/low-risk findings in atomic commits, and only reports anything requiring judgment. `run.sh` is a thin audit-specific wrapper around the generic, goal-agnostic loop engine at `.pi/scripts/pi-loop.sh` — reuse that engine directly (different `--prompt`, same time/round/STOP mechanics) to keep pi working toward any other goal on a schedule, no new while loop needed. See `.pi/audit/README.md` for installation and dry-run steps, and `docs/design.md` §10.3/§10.5 for the full rationale.
+An external OS-level scheduler (launchd/cron, not a pi extension) drives `.pi/audit/run.sh` through a bounded midnight–4am window, each round spawning an independent `pi -p "/audit"` process that picks the least-recently-covered area from `.pi/audit/log.md`, fixes clear/low-risk findings in atomic commits, and only reports anything requiring judgment. `run.sh` gives itself a dedicated git worktree (via `.pi/scripts/worktree.sh`, see `.pi/skills/worktree/SKILL.md`) rather than switching branches in whatever checkout happens to be current, then drives it with the generic, goal-agnostic loop engine at `.pi/scripts/loop.sh` — reuse that engine directly (different `--prompt`, same time/round/STOP mechanics) to keep pi working toward any other goal on a schedule, no new while loop needed. See `.pi/audit/README.md` for installation and dry-run steps, and `docs/design.md` §10.3/§10.5/§14 for the full rationale.
 
 ## Design rationale
 

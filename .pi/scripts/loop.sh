@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# .pi/scripts/pi-loop.sh — generic external loop driver for pi.
+# .pi/scripts/loop.sh — generic external loop driver for pi.
 #
 # Repeatedly invokes `pi -p "<prompt>"` as independent, one-shot,
 # non-interactive processes until a stop condition is hit (time window,
@@ -22,8 +22,8 @@
 # docs/design.md §10.3/§10.5 for the full rationale.
 #
 # Usage:
-#   pi-loop.sh --prompt "<text>" --until 04:00 --max-rounds 7
-#   pi-loop.sh --prompt-file goal.txt --duration 3600 --interval 60
+#   loop.sh --prompt "<text>" --until 04:00 --max-rounds 7
+#   loop.sh --prompt-file goal.txt --duration 3600 --interval 60
 #
 # At least one of --until / --duration / --max-rounds is required — an
 # unbounded loop is refused by design, not a supported mode.
@@ -36,9 +36,9 @@
 #   --max-rounds N               Stop after this many rounds.
 #   --round-timeout SECONDS     Per-round timeout (default 1500 = 25min).
 #   --interval SECONDS          Sleep between rounds (default 30).
-#   --label NAME                 Prefix for `pi --name` per round (default "pi-loop").
+#   --label NAME                 Prefix for `pi --name` per round (default "loop").
 #   --stop-file PATH             Kill-switch file (default: derived from --log).
-#   --log FILE                   Operational log path (default: ./pi-loop.log).
+#   --log FILE                   Operational log path (default: ./loop.log).
 #   --cwd PATH                    Run `pi` from this directory (default: current dir).
 #   --no-approve                  Don't pass --approve to pi (default: pass it — see
 #                                  docs/security.md, headless modes otherwise silently
@@ -68,9 +68,9 @@ DURATION=""
 MAX_ROUNDS=""
 ROUND_TIMEOUT=1500
 INTERVAL=30
-LABEL="pi-loop"
+LABEL="loop"
 STOP_FILE=""
-LOG_FILE="./pi-loop.log"
+LOG_FILE="./loop.log"
 RUN_CWD="."
 APPROVE=1
 NTFY_ENABLED=1
@@ -101,24 +101,24 @@ while [ $# -gt 0 ]; do
 	--post-round-check) POST_ROUND_CHECK="$2"; shift 2 ;;
 	--no-ntfy) NTFY_ENABLED=0; shift ;;
 	-h | --help) usage; exit 0 ;;
-	*) echo "pi-loop.sh: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+	*) echo "loop.sh: unknown argument: $1" >&2; usage >&2; exit 2 ;;
 	esac
 done
 
 if [ -n "$PROMPT" ] && [ -n "$PROMPT_FILE" ]; then
-	echo "pi-loop.sh: pass --prompt or --prompt-file, not both." >&2
+	echo "loop.sh: pass --prompt or --prompt-file, not both." >&2
 	exit 2
 fi
 if [ -z "$PROMPT" ] && [ -z "$PROMPT_FILE" ]; then
-	echo "pi-loop.sh: --prompt or --prompt-file is required." >&2
+	echo "loop.sh: --prompt or --prompt-file is required." >&2
 	exit 2
 fi
 if [ -n "$PROMPT_FILE" ]; then
-	[ -r "$PROMPT_FILE" ] || { echo "pi-loop.sh: cannot read --prompt-file $PROMPT_FILE" >&2; exit 2; }
+	[ -r "$PROMPT_FILE" ] || { echo "loop.sh: cannot read --prompt-file $PROMPT_FILE" >&2; exit 2; }
 	PROMPT="$(cat "$PROMPT_FILE")"
 fi
 if [ -z "$UNTIL" ] && [ -z "$DURATION" ] && [ -z "$MAX_ROUNDS" ]; then
-	echo "pi-loop.sh: refusing to run unbounded — pass at least one of --until/--duration/--max-rounds." >&2
+	echo "loop.sh: refusing to run unbounded — pass at least one of --until/--duration/--max-rounds." >&2
 	exit 2
 fi
 
@@ -174,7 +174,7 @@ LOOP_START_EPOCH="$(date +%s)"
 duration_display="none"
 [ -n "$DURATION" ] && duration_display="${DURATION}s"
 
-log "=== pi-loop starting: label=$LABEL until=${UNTIL:-none} duration=$duration_display max_rounds=${MAX_ROUNDS:-none} round_timeout=${ROUND_TIMEOUT}s cwd=$RUN_CWD ==="
+log "=== loop starting: label=$LABEL until=${UNTIL:-none} duration=$duration_display max_rounds=${MAX_ROUNDS:-none} round_timeout=${ROUND_TIMEOUT}s cwd=$RUN_CWD ==="
 
 if [ -f "$STOP_FILE" ]; then
 	log "STOP file present at start ($STOP_FILE) - exiting without running anything."
@@ -184,7 +184,7 @@ fi
 if [ -n "$PRECHECK" ]; then
 	if ! bash -c "$PRECHECK"; then
 		log "ERROR: --precheck failed, refusing to start."
-		ntfy "pi-loop ($LABEL) aborted" "precheck failed before round 1."
+		ntfy "loop ($LABEL) aborted" "precheck failed before round 1."
 		exit 1
 	fi
 fi
@@ -201,7 +201,7 @@ while :; do
 
 	log "--- round $round starting ---"
 	round_start_epoch="$(date +%s)"
-	output_file="$(mktemp "${TMPDIR:-/tmp}/pi-loop-round-XXXXXX.txt")"
+	output_file="$(mktemp "${TMPDIR:-/tmp}/loop-round-XXXXXX.txt")"
 
 	pi_args=(--name "${LABEL}-r${round}-$(date +%Y%m%d-%H%M%S)")
 	[ "$APPROVE" = "1" ] && pi_args+=(--approve)
@@ -219,21 +219,21 @@ while :; do
 	if [ -n "$POST_ROUND_CHECK" ]; then
 		if ! bash -c "$POST_ROUND_CHECK"; then
 			log "ERROR: --post-round-check failed after round $round - stopping (fail closed)."
-			ntfy "pi-loop ($LABEL) round $round: post-round-check failed, loop stopped" "$tail_preview"
+			ntfy "loop ($LABEL) round $round: post-round-check failed, loop stopped" "$tail_preview"
 			rm -f "$output_file"
 			break
 		fi
 	fi
 
 	if [ "$round_exit" -ne 0 ]; then
-		ntfy "pi-loop ($LABEL) round $round failed (exit $round_exit)" "$tail_preview"
+		ntfy "loop ($LABEL) round $round failed (exit $round_exit)" "$tail_preview"
 	else
-		ntfy "pi-loop ($LABEL) round $round done" "$tail_preview"
+		ntfy "loop ($LABEL) round $round done" "$tail_preview"
 	fi
 
 	rm -f "$output_file"
 	sleep "$INTERVAL"
 done
 
-log "=== pi-loop finished: label=$LABEL rounds=$rounds_completed ==="
-ntfy "pi-loop ($LABEL) finished" "$rounds_completed round(s). See $LOG_FILE."
+log "=== loop finished: label=$LABEL rounds=$rounds_completed ==="
+ntfy "loop ($LABEL) finished" "$rounds_completed round(s). See $LOG_FILE."

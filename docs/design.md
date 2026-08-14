@@ -616,7 +616,7 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 明确**不**在这次一并调整 `hideThinkingBlock`（隐藏 thinking block 显示）——虽然文档上确认这个开关只影响终端显示、不影响 `defaultThinkingLevel` 也就是推理深度，但保留默认可见更符合"需要看到它在想什么"的日常使用习惯，先不动，之后如果确实觉得吵可以单独再开。
 
-### 10.5 把夜间审计的循环机制拆成通用引擎 `.pi/scripts/pi-loop.sh`
+### 10.5 把夜间审计的循环机制拆成通用引擎 `.pi/scripts/loop.sh`（§14 改名前原为 `pi-loop.sh`）
 
 10.3 落地之后你提了一个更通用的需求：外部反复调用 `pi -p "..."` 这套"断点 + while 循环"的机制，不应该只服务于"审计"这一个场景——目标应该是可替换的，只要换一个 prompt，就能让 pi 朝任何一个长期目标不断被重新激活去尝试，循环骨架本身复用。原来 §10.3 写的 `run.sh` 把审计逻辑（建分支、脏树检查）和循环机制（时间窗口、轮数上限、STOP、通知）糅在一个文件里，不满足这个要求。
 
@@ -674,6 +674,32 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 - **frontmatter**：新写的 `.github/scripts/check-frontmatter.sh`——检查 `.pi/prompts/*.md` 有 `description`、`.pi/skills/*/SKILL.md` 有 `name`+`description`，**顺带把这次 `{{arg}}` 那个 bug 做成一条回归检查**：扫 `.pi/prompts/*.md` 里还有没有 `{{xxx}}` 这种 pi 根本不认识的占位符残留，有就直接 fail——这个检查脚本在当前分支（还没合并 fix 那个分支）上跑确实真实报错了，验证了检查本身是有效的，不是摆设。
 
 明确的边界：这条 CI **不**跑任何 extension/prompt 的行为测试（没有沙箱、没有真实调用 `pi` 的机制），只保证"能过编译/语法检查、格式没错"，跟 §9.13/§10.5 描述的"真的跑一次、读真实输出"那种验证不是一回事，互补关系，不是替代关系。
+
+## 14. 把 `git worktree` 从 Race 专属机制升级成系统级能力，`pi-loop.sh` 改名 `loop.sh`
+
+`git worktree` 早就不是 Race 模式独有的东西——AGENTS.md 的 "Race mode mechanics"、`.pi/agents/builder.md`、`.pi/skills/git/SKILL.md`、§7.3 记录的坑（`remove` 一次只认一个路径、残留构建产物挡住 `remove`、赢家 `-d`/输家 `-D`）、`.pi/audit/README.md` 的 dry-run 建议，全都在用它，但全部是**裸命令 + 散落文档**，没有一处沉淀成"照着抄不会出错"的东西。同时审查 `.pi/audit/run.sh` 发现一个真实的不一致：它并没有真的隔离——直接在调用者当前的 checkout 里 `git checkout -b chore/nightly-audit-<date>`，这与 §9 里 "dirty-repo-guard 主要是为多 worktree/并行 session 场景设计" 的假设矛盾：一个无人值守的午夜进程理论上会把人自己正在用的 checkout 切到别的分支上。
+
+**决策**：按本文档反复应用的最轻机制优先顺序（prompt → skill → agent → extension → 外部脚本），worktree 拆成两层，而不是塞进 `loop.sh` 内部或到处复制粘贴：
+
+- **知识层** `.pi/skills/worktree/SKILL.md`：收拢"何时用/怎么建/怎么安全删除"，供任何 pi session 按需加载，不再只是 Race mode 文档里的附属内容。
+- **机制层** `.pi/scripts/worktree.sh`：一个不依赖 pi 进程的小 CLI（`add`/`remove`/`list`），把上面那些坑真正编码成逻辑（`remove` 先检查 `git status`，脏了不带 `--force` 就拒绝并打印状态，不自动替调用方判断"是不是只是构建产物"——判断权留给调用方，符合 §3.1/§3.4 一贯的不做静默护栏立场；`--delete-branch` 自动按 `git branch --merged` 判断 `-d` 还是 `-D`）。`add` 还处理了 `run.sh` 原来手写的"分支已存在就直接 attach，不存在才 `-b` 新建"这个同日重跑场景，不用每个调用方各自重写一遍。
+
+`.pi/scripts/pi-loop.sh` 同时改名 `.pi/scripts/loop.sh`：一旦 `.pi/scripts/` 里有了 `worktree.sh` 这个纯名词兄弟文件，`pi-loop.sh` 上那个孤立的 `pi-` 前缀就只是历史遗留，不是这个目录的既有惯例——改名让两者在命名上对齐，都是"在 pi 进程之外运行、被其他脚本复用"这一层的平级成员。脚本内部逻辑不变：它已经靠 `--cwd` 支持指向任意目录，不需要为 worktree 专门加选项，继续保持对"目标是什么"零知情的引擎定位——worktree 是它的调用方（`audit/run.sh`、以及任何未来的类似 wrapper）负责建好之后再传进来的东西，不是 `loop.sh` 自己的职责。
+
+**`.pi/audit/run.sh` 迁移**：不再 `git checkout -b` 切调用者自己的 checkout，改成用 `worktree.sh add ../<repo>-audit-<date> chore/nightly-audit-<date>` 建一个专属 worktree，把这个路径传给 `loop.sh --cwd`；循环干净结束后自动 `worktree.sh remove` 清理掉 worktree 本身（分支保留，供人第二天早上 `git log chore/nightly-audit-<date>` 检查、决定要不要合并——`run.sh` 从不自动合并/删除这个分支，这一点没变）；脏了则不传 `--force`，直接把 worktree 原地留着失败退出，跟原来"脏了就必须人工介入"的 fail-closed 语义完全一致，只是现在"人工介入"针对的是一个隔离的 worktree，不再是调用者自己的工作目录。
+
+**测试方式**：跟 §9.13/§10.5 一致的方法——真的跑，不是纸面审查。用一个假 `pi`（只 echo 参数、`exit 0`）替换 PATH 里的真 `pi`，在临时目录的临时 git 仓库里复现了 `.pi/scripts/` 三个文件的真实布局，跑了三条路径都符合预期：一次干净的端到端运行（建 worktree → 跑 loop → 自动清理 → 调用者自己的 checkout 全程未被触碰）、同日重跑复用已存在 worktree（"Reusing existing worktree..." 日志确认）、以及脏树 fail-closed（`--precheck` 拒绝启动、worktree 原地保留、退出码非零）。`worktree.sh` 本身也单独冒烟测试过 `add`/`remove --force`/`remove --delete-branch`（含未干净时先拒绝、`--force` 后成功、分支按合并状态正确选 `-d`）。
+
+## 15. 评估：prompt / `worktree.sh` / `loop.sh` 要不要改写成 TypeScript extension —— 决定不做
+
+§14 落地之后冒出一个新方向：把 `.pi/prompts/*.md` 这批"软"的东西，连同刚加的 `worktree.sh`/`loop.sh`，一起重构成 `.pi/extensions/*.ts`。核实动机后确认：不是被某个具体能力缺口逼出来的，纯粹是"统一写成 TypeScript 感觉更一致"的冲动。这正好跟 §3.8 和 §14 刚刚遵循的"最轻机制优先"顺序（prompt → skill → agent → extension → 外部脚本）反着来，值得先讲清楚为什么不做，而不是直接动手重写一遍。
+
+**结论：不做。** 两条理由：
+
+1. **Prompt 模板转 extension 没有功能收益，只有成本**：§3.8 当时的判断依然成立——现有命令全是"读文件/git log → 生成文本 → 可能问确认"，pi 原生 prompt template（`$1`/`${1:-default}`/`$ARGUMENTS` 替换、`/name` 直接调用）本来就是为这类场景设计的。改成 extension 除了多背一层 `pi.registerCommand()` 样板代码、多一份 CI 里的 `tsc`/lint 负担、多一种"没有官方测试框架、只能真跑一次会话验证"的维护成本（§9.13/§10.5/§14 反复印证过这一点）之外，换不来任何东西。只有单个命令真的出现具体缺口——需要拦截/校验工具调用、需要跨调用状态（`.pi/work/<slug>/` 已经覆盖了"需要跨 session 存活"这类需求）、需要新 UI、需要比现有参数替换更复杂的交互——才值得为**那一个**命令单独加 extension，不是批量转换。
+2. **`worktree.sh`/`loop.sh` 不是"没必要转"，是"转不了"**：extension 靠 `pi.registerCommand()`/`pi.on()` 注册，只在**一个正在运行的 pi 进程内部**生效，discovery 只发生在 pi 启动那一刻。`loop.sh` 存在的唯一理由恰恰是要跑在 pi 进程**之外**——一轮轮把 `pi -p "..."` 当独立子进程拉起，由 launchd/cron 在整夜无人值守、期间不存在任何 pi 会话的情况下调度；`loop.sh` 头部注释原话就是"extension factories must not start background resources/timers"，这是 pi 自己的 extension 契约限制，不是 Forge 的选择。`worktree.sh` 同理——`.pi/audit/run.sh` 是在 pi 进程启动**之前**调用它把 worktree 准备好，再把路径通过 `--cwd` 交给即将启动的 pi 进程；extension 没有办法在 pi 启动之前运行。硬转会直接破坏"无人值守整夜跑、期间不需要任何 pi 会话存活"这个设计目标本身，不是风格选择的问题。
+
+**决定**：维持现状——prompt 留 prompt，`worktree.sh`/`loop.sh` 留外部脚本。以后如果冒出具体的能力缺口（运行时事件钩子、给 model 暴露可直接调用的工具等），按需为那一个缺口单独评估要不要加 extension，不做批量转换。
 
 ---
 
