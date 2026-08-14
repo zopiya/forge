@@ -4,8 +4,7 @@ A pure-dev coding agent setup for [pi](https://pi.dev). Clone this as a template
 
 ## What's here
 
-- `AGENTS.md` — loaded automatically by pi; the routing logic, dev defaults, and startup behavior live here.
-- `APPEND_SYSTEM.md` — the non-negotiable hard constraints, appended to pi's default system prompt.
+- `AGENTS.md` — loaded automatically by pi; the non-negotiable hard constraints, routing logic, dev defaults, and startup behavior all live here (see `docs/design.md` §16 for why this isn't a separate `APPEND_SYSTEM.md` anymore).
 - `.pi/skills/` — language and methodology references (Python, Rust, TypeScript, shell, architecture, testing, git, API design, spec-driven work, brainstorming/design thinking).
 - `.pi/agents/` — `scout`, `planner`, `reviewer` (read-only, dispatched only when isolation or parallelism is actually worth it) and `builder` (the one profile with write access, dispatched only for Race mode into its own `git worktree`). There's no `debug`/`general` file — that's just the main session.
 - `.pi/extensions/subagent/` — pi's own reference `subagent` tool implementation, vendored (not pi-core). `.pi/agents/*.md` is inert markdown without this — it's the thing that actually discovers and dispatches to those files. See AGENTS.md's "How to actually dispatch" for the call shape.

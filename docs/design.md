@@ -701,6 +701,15 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 **决定**：维持现状——prompt 留 prompt，`worktree.sh`/`loop.sh` 留外部脚本。以后如果冒出具体的能力缺口（运行时事件钩子、给 model 暴露可直接调用的工具等），按需为那一个缺口单独评估要不要加 extension，不做批量转换。
 
+## 16. `APPEND_SYSTEM.md` 根本没生效——查证后砍掉，内容并进 `AGENTS.md`
+
+有人问"要不要砍掉 `APPEND_SYSTEM.md`，反正 AI 也不会主动去读它"，这个直觉部分对、但说的不是真正的机制问题——去查了 pi 自己的文档（`docs/usage.md`/`docs/security.md`）才发现一个更根本的 bug：
+
+- pi 对"system prompt 文件"的原生自动发现，认的路径是 **`.pi/SYSTEM.md`** / **`.pi/APPEND_SYSTEM.md`**（项目级）或 `~/.pi/agent/{SYSTEM,APPEND_SYSTEM}.md`（全局），必须在 `.pi/` 目录里面。而 Forge 当初落地时把文件放在了**仓库根目录**（`APPEND_SYSTEM.md`），不是 `.pi/APPEND_SYSTEM.md`——`pi --help`/`docs/usage.md` 里也确认了这一点：`AGENTS.md`/`CLAUDE.md` 有专门的 `--no-context-files` 开关说明它们是原生自动加载的机制，而 system prompt 文件的自动发现同样是路径写死的原生机制，不是"模型自己选择去读"的东西。仓库根目录的 `APPEND_SYSTEM.md` 从落地那天起就不在 pi 会去找的任何一个路径上——**它从来没有被真正加载过**，`pi.registerCommand`/`subagent` 那条唯一真实用到 `--append-system-prompt` 的代码路径（`.pi/extensions/subagent/index.ts`）传的也是 dispatched agent 自己的 `systemPrompt`，跟这个文件无关。3.1 节当时的设计意图（"保留 pi 默认系统提示的既有校准，只追加强约束，不用 AGENTS.md 的方式重新发明一遍"）从一开始就没有真正生效过。
+- 即便把路径修好（挪到 `.pi/APPEND_SYSTEM.md`），`docs/security.md` 里还确认了另一个更根本的问题：`.pi/SYSTEM.md`/`.pi/APPEND_SYSTEM.md` 跟 `.pi/settings.json`/`.pi/extensions`/`.pi/skills` 一样，属于"需要 project trust 才加载"的资源——非交互模式（`-p`，`loop.sh`/`audit/run.sh` 用的正是这个）在没有保存过信任决定时，`defaultProjectTrust` 默认值 `"ask"` 会直接当作不信任处理，这批"non-negotiable"约束就悄悄不生效。而 `AGENTS.md`（连同 `CLAUDE.md`）明确写着"不管 project trust 结果如何都会加载"——不需要过信任确认这一步。也就是说，就算修好路径，system prompt 文件这条路径依然比 AGENTS.md 更脆弱，不适合放"三条不可谈判的硬约束"这种东西。
+
+**决定**：不修路径，直接把 `APPEND_SYSTEM.md` 的三条硬约束（不编造结果、如实报告失败、不确定时明说）和容器化前提的免责声明，原文并进 `AGENTS.md` 开头新增的"Non-negotiable"小节，删掉 `APPEND_SYSTEM.md` 本体。理由：既然要重新选路径，AGENTS.md 本来就已经是"pi 保证会加载、不看 project trust"的机制，比修好路径后的 system prompt 文件更可靠，没有理由为了"system prompt 位置更靠底层、模型更难被后续指令覆盖"这一点理论优势，去继续维护一个实际上更脆弱、还得额外记住"这玩意必须放在 `.pi/` 里面"的独立文件。同步更新了所有指向它的地方：`README.md`、`.pi/extensions/protected-paths.ts` 头部注释、`.pi/prompts/smoke-test.md`。§3.1/§4 的原始草案记录保留，作为"当初为什么选 APPEND_SYSTEM.md"的历史决策，不回改。
+
 ---
 
 对这份方案有异议或要调整的地方直接说，我按你的反馈改这份文档。

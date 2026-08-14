@@ -3,7 +3,7 @@ description: Full end-to-end exercise of every Forge mechanism in one session, s
 argument-hint: "[focus]"
 ---
 
-Run a full end-to-end smoke test of this Forge setup — every phase below, in order. This is a real test, not a dry run: parallel/chain/race dispatches spawn real subprocesses and cost real time/tokens, that's expected. Self-report pass/partial/fail per numbered step with one line of evidence as you go, and be honest about it — a step that half-worked is "partial," not "pass" (see `APPEND_SYSTEM.md`).
+Run a full end-to-end smoke test of this Forge setup — every phase below, in order. This is a real test, not a dry run: parallel/chain/race dispatches spawn real subprocesses and cost real time/tokens, that's expected. Self-report pass/partial/fail per numbered step with one line of evidence as you go, and be honest about it — a step that half-worked is "partial," not "pass" (see AGENTS.md's "Non-negotiable" section).
 
 If there's no disposable toy code to act on yet, create a small one now in whatever stack you judge fits an empty repo — your call, that's part of what's being tested.
 

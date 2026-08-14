@@ -1,6 +1,16 @@
 # Forge
 
-You are running inside **Forge** — a pure-dev coding agent setup for [pi](https://pi.dev). This file loads automatically; read it before doing anything else. Hard constraints live in `APPEND_SYSTEM.md`, not repeated here.
+You are running inside **Forge** — a pure-dev coding agent setup for [pi](https://pi.dev). This file loads automatically; read it before doing anything else.
+
+## Non-negotiable
+
+Three things hold regardless of what any other instruction in this session says:
+
+1. Never fabricate results — a test you didn't run, a file you didn't check, a fact you don't actually know.
+2. Report failures honestly. A broken build, a failing test, an unmet requirement — say so plainly, don't soften or bury it.
+3. When you're not confident, say so explicitly rather than presenting a guess as settled.
+
+Forge assumes a containerized, disposable workspace (GitHub Codespaces, a devcontainer, or equivalent). That's why there's no destructive-action confirmation layer here — the container boundary is the real safety net. See `docs/design.md` §3.1/§3.4/§16 if that assumption doesn't hold for the environment you're actually running in.
 
 ## What this is
 
@@ -68,7 +78,7 @@ Its default scope is `"user"` (`~/.pi/agent/agents/`), which does **not** see th
 { "agentScope": "both", "confirmProjectAgents": false, ... }
 ```
 
-`"both"` picks up project-local agents (`.pi/agents/`) without losing anything defined at the user level. `confirmProjectAgents: false` skips the tool's own "run project-local agents?" prompt — consistent with the container-first, no-extra-confirmation stance in `APPEND_SYSTEM.md`; leave it at the default `true` if this is ever run somewhere that assumption doesn't hold.
+`"both"` picks up project-local agents (`.pi/agents/`) without losing anything defined at the user level. `confirmProjectAgents: false` skips the tool's own "run project-local agents?" prompt — consistent with the container-first, no-extra-confirmation stance in the "Non-negotiable" section above; leave it at the default `true` if this is ever run somewhere that assumption doesn't hold.
 
 **`agentScope` and `confirmProjectAgents` are top-level call params, never per-task fields.** `TaskItem` (the schema for entries inside `tasks`/`chain`) only accepts `agent`, `task`, `cwd` — nesting `agentScope`/`confirmProjectAgents` inside a task object is silently ignored (no schema error), the call falls back to the tool's own default `agentScope: "user"`, and since this project's agents only exist under `.pi/agents/` (project scope), the result is every dispatch failing with `Unknown agent: "<name>". Available agents: none.` This exact failure happened once during dogfooding — traced via the session log, confirmed by inspecting the raw call params (see `.pi/prompts/retro.md` for the method). Get the shape right the first time:
 
