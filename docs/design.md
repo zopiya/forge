@@ -582,7 +582,7 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 同样是纯 prompt template（`.pi/prompts/btw.md`），不需要状态文件（已确认不需要持久化）。核心行为：简短回答，然后原样回到当前任务/plan，不碰 `.pi/work/`、todo、plan mode 状态——这个问题本身不算主任务的进展，也不是新任务。
 
-### 10.3 夜间审计循环 —— 外部调度 + `pi -p` 一次性子进程，不是 extension 定时器
+### 10.3 夜间审计循环 —— 外部调度 + `pi -p` 一次性子进程，不是 extension 定时器（§17：这套子系统后来整个砍掉了，机制折叠进 `.pi/scripts/README.md` 的示例，见 §17）
 
 **为什么不用 extension 定时器**：pi 官方 extension 文档明确警告，不要在 extension factory 里启动后台资源（进程/socket/文件监听/定时器）；Forge 本来就没有任何调度原语。做法直接对齐已有的 `subagent` dispatch 模型——外部反复调用 `pi -p "..."` 起独立一次性进程，不是单个 session 里的常驻循环。调度本身（00:00–04:00 窗口、轮数上限）完全交给外部 OS 调度器（launchd 为主，crontab 作为备选说明），pi/extension 层不参与调度决策。
 
@@ -709,6 +709,16 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 - 即便把路径修好（挪到 `.pi/APPEND_SYSTEM.md`），`docs/security.md` 里还确认了另一个更根本的问题：`.pi/SYSTEM.md`/`.pi/APPEND_SYSTEM.md` 跟 `.pi/settings.json`/`.pi/extensions`/`.pi/skills` 一样，属于"需要 project trust 才加载"的资源——非交互模式（`-p`，`loop.sh`/`audit/run.sh` 用的正是这个）在没有保存过信任决定时，`defaultProjectTrust` 默认值 `"ask"` 会直接当作不信任处理，这批"non-negotiable"约束就悄悄不生效。而 `AGENTS.md`（连同 `CLAUDE.md`）明确写着"不管 project trust 结果如何都会加载"——不需要过信任确认这一步。也就是说，就算修好路径，system prompt 文件这条路径依然比 AGENTS.md 更脆弱，不适合放"三条不可谈判的硬约束"这种东西。
 
 **决定**：不修路径，直接把 `APPEND_SYSTEM.md` 的三条硬约束（不编造结果、如实报告失败、不确定时明说）和容器化前提的免责声明，原文并进 `AGENTS.md` 开头新增的"Non-negotiable"小节，删掉 `APPEND_SYSTEM.md` 本体。理由：既然要重新选路径，AGENTS.md 本来就已经是"pi 保证会加载、不看 project trust"的机制，比修好路径后的 system prompt 文件更可靠，没有理由为了"system prompt 位置更靠底层、模型更难被后续指令覆盖"这一点理论优势，去继续维护一个实际上更脆弱、还得额外记住"这玩意必须放在 `.pi/` 里面"的独立文件。同步更新了所有指向它的地方：`README.md`、`.pi/extensions/protected-paths.ts` 头部注释、`.pi/prompts/smoke-test.md`。§3.1/§4 的原始草案记录保留，作为"当初为什么选 APPEND_SYSTEM.md"的历史决策，不回改。
+
+## 17. 项目瘦身：砍掉 `.pi/audit/`、删掉 "loop until X"、引入 Forger 身份
+
+`APPEND_SYSTEM.md` 那次清理之后，提出了一个更大的问题——整体做减法。查证了两个具体疑点，另外单独定了一个风格决定。
+
+**`.pi/audit/` 砍掉**：查证下来，`run.sh`（worktree 建立/清理/通知逻辑）和 `.pi/prompts/audit.md`（按 `log.md` 轮转选区域、fix-低风险/report-需判断 的分类策略、干净树契约）是真实的 audit 领域逻辑，不是 `loop.sh` 能替代的东西——方向上是先有 audit（§10.3），`loop.sh` 才是从里面为了通用化抽出来的（§10.5），audit 至今仍是 `loop.sh` 唯一的真实调用方。但落地到现在**一次都没有真的跑过**：`log.md` 只有模板头零真实条目，`git log -- .pi/audit/` 三个提交全是同一天在搭机制/重构，连测试都是拿假 `pi` 在临时目录里跑的。而 `README.md`（93 行）里一大半是安装/运维仪式——launchd 和 crontab 两套复制粘贴命令、~28 行"上线前先跑一遍"式的通用 dry-run 说教；`launchd.example.plist`（30 行）是纯粹的 macOS LaunchAgent 模板，除路径/topic 外没有 audit 专属内容；`run.sh` 里还自己重复实现了一份 `log()`/`ntfy()`，跟 `loop.sh` 的近乎一样。按 §0 的判断标准（"这个组件还创造净价值吗？创造就留，不创造就砍，不为了完整对应而保留仪式感"）——决定不是"只瘦身 README"，而是**整个子系统砍掉**：`run.sh`/`README.md`/`log.md`/`launchd.example.plist`/`.pi/prompts/audit.md` 全删，机制折叠成 `.pi/scripts/README.md` 里一段不依赖任何已删除文件、可独立读懂的紧凑示例（`worktree.sh add` → `loop.sh --cwd ... --precheck ... --post-round-check ...` → `worktree.sh remove`），`AGENTS.md` 原来那一整节换成一段通用的"给需要无人值守长期重试的目标，用 `loop.sh`"指路段落。真正独有的领域知识（分类策略、log 轮转、干净树契约）目前没有别的地方在用，就跟着一起砍——如果以后真的要用，那时候的真实需求会比现在这套从没跑过的设计更准。
+
+**"loop until X" 删掉**：查证发现它跟 `loop.sh` 根本不是同一件事、也不是被取代的关系——"loop until X" 全仓库只有两处提及（`AGENTS.md`/本文档 §3.7 各一行），没有任何代码支撑"cap at 3 rounds"，纯粹指望模型自己记住；`doom-loop-guard.ts` 管的是"连续 3 次完全相同的 tool call"，跟它不是一回事；时间线上它是从 Forge 之前 Conductor 时代的 `meta.md` 原样保留下来的路由触发词（§3.7，最早期），比 `loop.sh`（§10.5/§14，晚得多）早得多，两边在本文档里从未互相提过；`smoke-test.md` 的 16 步里也没有一步测过它。结论：不是被 `loop.sh` 取代（两者范围本来就不重叠——一个是对话内的有限重试，一个是外部无人值守的长期重试），而是它自己从落地起就没有任何东西支撑其存在、也从未被验证过，直接从 `AGENTS.md` 的 manual triggers 表里删掉，不额外写区分说明。
+
+**引入 Forger 身份**：在 `AGENTS.md` 新增 "Identity" 小节，agent 在这个仓库里自称 **Forger**，日常对话（自我介绍、footer、session 命名、普通回复）里自然使用，不只是被问"你是谁"才提。刻意选了克制版语气——不堆锻造/打磨类比喻，不写成一整套人格设定——避免跟 §2 "系统提示应该精简，赌前沿模型已经'懂'角色，不需要冗长说教" 这条已确认的原则冲突；commit message、PR 描述保持中性专业，不带人格化措辞，因为那是项目历史记录，不是对话。
 
 ---
 
