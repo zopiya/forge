@@ -1,11 +1,61 @@
 # Forge — 基于 pi 的 coding agent harness 设计方案
 
-> 状态：P1+P2 已落地（见根目录），文档随实现同步更新
+> 状态：1.0——P1/P2 早已落地，§14-21 是落地后持续演进/瘦身/交叉审计的记录，文档随实现同步更新
 > 前身：opencode-harness / Conductor
 > 目标运行时：https://pi.dev (earendil-works/pi)
 > 命名说明："Forge" 是这套方法论/设计层的名字，不是目录命名空间——落盘路径仍用 pi 自己的 `.pi/` 前缀（类似 `.git/`），两者不冲突
 >
-> **勘误（落地后发现）**：3.3/3.8/第 5 节原来断言"v1 不需要写任何 extension 代码"，这个判断是错的。`.pi/agents/*.md` 的发现和 dispatch（single/parallel/chain）**不是 pi 核心功能**，完全由 pi 自带的一个示例 extension 定义和实现——不装这个 extension，`.pi/agents/*.md` 就是没人读的死文件，pi 启动 banner 也不会有 Agents 分区。已把这个 extension 原样 vendor 进 `.pi/extensions/subagent/`（`index.ts` + `agents.ts`，来自 pi 官方 `examples/extensions/subagent/`）。"不做 guardrail extension" 这条结论不受影响，"完全不需要 extension 代码"这条不成立。另外这个 tool 的 `agentScope` 默认是 `"user"`（只认 `~/.pi/agent/agents/`），dispatch 时必须显式传 `agentScope: "both"` 才能看到项目里 `.pi/agents/` 下的定义，见 `AGENTS.md`"How to actually dispatch"。
+> **如何读这份文档**：这是一份按时间顺序写的**决策日志**，不是当前状态的参考手册——早期章节记录的是落地前后的判断过程，后面章节经常推翻/取代前面的结论（每处都用"后续变化"引用块指向取代它的章节，没有回改原文）。想知道 Forge **现在**具体怎么运作，读 `.pi/FORGE.md`（运作说明，会话里自动加载）和 `.pi/README.md`（文件总览），不是这份文档；想知道**为什么**是这样，才来这里按章节号查。
+>
+> **勘误（落地后发现）**：3.3/3.8/第 5 节原来断言"v1 不需要写任何 extension 代码"，这个判断是错的。`.pi/agents/*.md` 的发现和 dispatch（single/parallel/chain）**不是 pi 核心功能**，完全由 pi 自带的一个示例 extension 定义和实现——不装这个 extension，`.pi/agents/*.md` 就是没人读的死文件，pi 启动 banner 也不会有 Agents 分区。已把这个 extension 原样 vendor 进 `.pi/extensions/subagent/`（`index.ts` + `agents.ts`，来自 pi 官方 `examples/extensions/subagent/`）。"不做 guardrail extension" 这条结论不受影响，"完全不需要 extension 代码"这条不成立。另外这个 tool 的 `agentScope` 默认是 `"user"`（只认 `~/.pi/agent/agents/`），dispatch 时必须显式传 `agentScope: "both"` 才能看到项目里 `.pi/agents/` 下的定义，见 `.pi/FORGE.md`"How to actually dispatch"。
+
+## 目录
+
+- [0. 定位](#0-定位)
+- [1. 保留的核心思想（跨框架不变的部分）](#1-保留的核心思想跨框架不变的部分)
+- [2. 因 pi 哲学而改变判断的部分](#2-因-pi-哲学而改变判断的部分)
+- [3. 逐组件方案](#3-逐组件方案)
+  - [3.1 Constitution → 精简版 `SYSTEM.md` / `APPEND_SYSTEM.md`](#31-constitution-精简版-systemmd-append_systemmd)
+  - [3.2 AGENTS.md → 直接复用 pi 原生机制](#32-agentsmd-直接复用-pi-原生机制)
+  - [3.3 Agent 角色 → `.pi/agents/*.md`，但默认不拆](#33-agent-角色-piagentsmd但默认不拆)
+  - [3.4 Rules → 拆两半；护栏从"默认必装"降级为"按需 opt-in，v1 不做"](#34-rules-拆两半护栏从默认必装降级为按需-opt-inv1-不做)
+  - [3.5 Skills → 原样迁移，且天然就是纯 dev 范畴](#35-skills-原样迁移且天然就是纯-dev-范畴)
+  - [3.6 Synapse → 砍掉"服务"，留下"约定"](#36-synapse-砍掉服务留下约定)
+  - [3.7 meta 的角色 → 主 session 的行为约定，而非独立进程](#37-meta-的角色-主-session-的行为约定而非独立进程)
+  - [3.8 Commands → 大部分不需要写 extension 代码，用 pi 原生 prompt template](#38-commands-大部分不需要写-extension-代码用-pi-原生-prompt-template)
+  - [3.9 MCP → 不做协议层，优先复用已有原生 CLI](#39-mcp-不做协议层优先复用已有原生-cli)
+  - [3.10 pi 的 session 存储位置（事实核查，非决策项）](#310-pi-的-session-存储位置事实核查非决策项)
+- [4. 新目录结构（草案，已过时——见 §14/§18/§19/§20）](#4-新目录结构草案)
+- [5. 分阶段落地（确认方案后再执行）](#5-分阶段落地确认方案后再执行)
+- [6. 开放项状态](#6-开放项状态)
+- [7. 落地后基于真实机制的适配](#7-落地后基于真实机制的适配)
+  - [7.1 dispatch 的真实成本模型](#71-dispatch-的真实成本模型)
+  - [7.2 chain 的 `{previous}` 是纯文本替换，不是上下文共享](#72-chain-的-previous-是纯文本替换不是上下文共享)
+  - [7.3 每个 task 都能带 `cwd` —— Race 模式的关键，之前设计没用到这个能力](#73-每个-task-都能带-cwd-race-模式的关键之前设计没用到这个能力)
+  - [7.4 Parallel 的硬上限](#74-parallel-的硬上限)
+- [8. Dogfooding 回路：用真实 session log 驱动改进](#8-dogfooding-回路用真实-session-log-驱动改进)
+- [9. Extension 生态调研 + 批量引入（功能/体验类，非护栏）](#9-extension-生态调研-批量引入功能体验类非护栏)
+  - [9.1–9.3 安装机制、引入的六个 extension、遗留收尾项](#91-两种安装机制结论决定了怎么落地)
+  - [9.4–9.10 footer/通知打磨（多轮反复，最后推翻重来）](#94-落地后追加打磨ntfy-推送-footer-视觉细节)
+  - [9.11–9.13 自主审计、包生态调研、全量插件健壮性审计](#911-自主审计两处看起来对实际不生效的静默失效)
+- [10. v1 之后新增：`/init`、`/btw`、夜间审计循环](#10-v1-之后新增initbtw夜间审计循环)
+  - [10.1 `/init`（后续变化见 §20）](#101-init-生成更新-agentsmd绝不覆盖已手写的文件)
+  - [10.2 `/btw`](#102-btw-顺带一问不进入任务plan-状态)
+  - [10.3 夜间审计循环（后续变化见 §17）](#103-夜间审计循环-外部调度-pi--p-一次性子进程不是-extension-定时器)
+  - [10.4 `.pi/settings.json`](#104-pisettingsjson-关掉-skill-自动生成的-skillname-命令)
+  - [10.5 通用循环引擎 `loop.sh`（后续变化见 §14）](#105-把夜间审计的循环机制拆成通用引擎-piscriptsloopsh)
+  - [10.6 `project-layout` 骨架生成](#106-补上-project-layout-引用的空头支票-让-init-真的去建骨架)
+- [11. `{{arg}}` 占位符不生效的 bug（修复）](#11-pipromptsmd-里-arg-占位符不生效的-bug修复)
+- [12. `/release`](#12-release-把版本发布串成一条命令探测部署方式而不是假设)
+- [13. CI（`lint.yml`，后续变化见 §18）](#13-githubworkflowslintyml-把手动验证里能自动化的部分自动化)
+- [14. `git worktree` 升级成系统级能力，`loop.sh` 改名](#14-把-git-worktree-从-race-专属机制升级成系统级能力pi-loopsh-改名-loopsh)
+- [15. 评估 TypeScript extension 重构 —— 决定不做](#15-评估prompt-worktreesh-loopsh-要不要改写成-typescript-extension-决定不做)
+- [16. `APPEND_SYSTEM.md` 从没生效——砍掉（后续变化见 §20）](#16-append_systemmd-根本没生效查证后砍掉内容并进-agentsmd)
+- [17. 瘦身：`.pi/audit/`、"loop until X"、Forger 身份（后续变化见 §20）](#17-项目瘦身砍掉-piaudit删掉-loop-until-x引入-forger-身份)
+- [18. `package.json`/`tsconfig.json`/`bun.lock` 挪进 `.pi/`](#18-packagejsontsconfigjsonbunlock-从仓库根目录挪进-pi)
+- [19. `README.md`/`design.md` 挪进 `.pi/`（后续变化见 §20）](#19-readmemddocsdesignmd-也挪进-pi仓库根目录只留-agentsmd)
+- [20. `AGENTS.md` 交还给项目，`.pi/FORGE.md` + extension 注入](#20-agentsmd-交还给项目forge-自己的运作说明搬进-piforgemd靠-extension-注入-system-prompt)
+- [21. Codex 交叉审计：`worktree.sh remove` 的一个真 bug](#21-codex-交叉审计发现一个真-bugworktreesh-remove-失败时可能报告成功)
 
 ---
 
@@ -53,13 +103,17 @@ pi 作者的核心论点（有充分证据支撑，不是臆测）：
 
 ### 3.1 Constitution → 精简版 `SYSTEM.md` / `APPEND_SYSTEM.md`
 
+> **后续变化（§16/§20）**：这套机制查证后发现从落地起就没真正生效过（文件路径放错，pi 根本没加载），§16 砍掉；内容并进 AGENTS.md，§20 又把它从 AGENTS.md 搬进了 `.pi/FORGE.md`。
+
 - 只保留**真正不可谈判的硬约束**：禁止编造结果、诚实报告失败、不确定时如实声明置信度。
 - **不再包含"破坏性操作前必须确认"**——最初草案里这条是硬约束，但结合"默认容器化运行"这个前提（见 0 节）重新判断：确认弹窗保护的是"操作后果不可挽回"，容器/一次性工作区本身已经兜住了这一层，两道锁做同一件事没有增量价值。诚实性和破坏性操作确认是两回事，砍了后者不等于连诚实性一起砍。
 - 去掉原 `law/constitution.md` 里偏程序性的内容（那些应该在 AGENTS.md 或 skill 里）。
 - 用 `APPEND_SYSTEM.md` 而非完全替换默认系统提示——保留 pi 默认提示对模型行为的既有校准，只追加我们的强约束，不重新发明一遍"你是个 coding agent"。
 - **诚实声明边界**：这套假设的前提是"容器化默认"。如果哪天在裸机、没有沙箱的机器上直接跑 Forge，这里没有兜底——这是刻意取舍，不是遗漏，写在这里是为了不让未来的自己踩坑。
 
-### 3.2 AGENTS.md → 直接复用 pi 原生机制（§20：Forge 自己那部分内容后来搬去了 `.pi/FORGE.md`，AGENTS.md 交还给项目，见 §20）
+### 3.2 AGENTS.md → 直接复用 pi 原生机制
+
+> **后续变化（§20）**：Forge 自己那部分内容后来搬去了 `.pi/FORGE.md`，AGENTS.md 交还给项目。
 
 - pi 原生支持 `~/.pi/agent/AGENTS.md`（全局）→ 父目录级联 → 当前目录，命名和语义与 Conductor 现状完全一致。
 - 原 Conductor 的 `AGENTS.md`（全局助手行为 + agent registry 总览）可以**近乎原样迁移**，只需把 opencode 专属的路由描述换成 pi 的 dispatch 工具说明。
@@ -234,6 +288,8 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 
 ## 4. 新目录结构（草案）
 
+> **后续变化（§14/§18/§19/§20）**：这是落地前的原始草案，实际目录结构后来变了很多——`AGENTS.md`/`SYSTEM.md`/`APPEND_SYSTEM.md` 这套根目录布局已经不是当前状态，保留在这里作历史记录，不代表现状。
+
 ```
 <project>/
   .pi/
@@ -295,6 +351,8 @@ pi 没有"自动路由到不同进程"的内置机制，`meta` 不再是一个�
 同时确认了 chain **第一步失败就整体停**（源码里 `Chain stopped at step N`），没有部分继续，已经写进 `AGENTS.md`。
 
 ### 7.3 每个 task 都能带 `cwd` —— Race 模式的关键，之前设计没用到这个能力
+
+> **后续变化（§14）**：这里描述的裸 `git worktree` 命令后来沉淀成了 `.pi/scripts/worktree.sh` + `.pi/skills/worktree/SKILL.md`，worktree 也从 Race 专属升级成系统级能力，见 §14。
 
 这是最大的一处补强。`subagent` 工具的 single/parallel/chain 三种模式的每个 task 都接受一个 `cwd` 参数（独立工作目录），之前的设计完全没提这个字段，导致 Race 模式（比较多个实现方案）设计上是空的——3.7 节原来只写了"parallel dispatch 多个方案，主 session 比较后选择"，但没说清楚：如果要 dispatch 出去真的写代码比较两个实现，两个并行进程写同一个工作目录会互相打架。
 
@@ -576,13 +634,17 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 ### 10.1 `/init` —— 生成/更新 AGENTS.md，绝不覆盖已手写的文件
 
+> **后续变化（§20）**：Forge 自己不再随模板提供 `AGENTS.md`，`/init` 的 Step 1 现在对全新 clone 总是走"从头生成"这条路径；Step 2 加了明确指示忽略 `.pi/FORGE.md`，见 §20。
+
 同 `/readme`/`/status` 一样是纯 prompt template（`.pi/prompts/init.md`），不需要 extension 代码。核心约束是幂等/非破坏性：AGENTS.md 一旦存在就是手写的、经过设计的文件（Forge 自己这份就是逐决策记在本文档里的），`/init` 检测到已存在就只提"缺了什么、加在哪"的具体建议，问过再写，绝不整体重写或静默覆盖；只有全新项目（没有 AGENTS.md）才走"从头生成"这条路径——这也是这个命令的主要使用场景：把 Forge 方法论带到一个新项目。
 
 ### 10.2 `/btw` —— 顺带一问，不进入任务/plan 状态
 
 同样是纯 prompt template（`.pi/prompts/btw.md`），不需要状态文件（已确认不需要持久化）。核心行为：简短回答，然后原样回到当前任务/plan，不碰 `.pi/work/`、todo、plan mode 状态——这个问题本身不算主任务的进展，也不是新任务。
 
-### 10.3 夜间审计循环 —— 外部调度 + `pi -p` 一次性子进程，不是 extension 定时器（§17：这套子系统后来整个砍掉了，机制折叠进 `.pi/scripts/README.md` 的示例，见 §17）
+### 10.3 夜间审计循环 —— 外部调度 + `pi -p` 一次性子进程，不是 extension 定时器
+
+> **后续变化（§17）**：这套子系统后来整个砍掉了，机制折叠进 `.pi/scripts/README.md` 的示例，见 §17。
 
 **为什么不用 extension 定时器**：pi 官方 extension 文档明确警告，不要在 extension factory 里启动后台资源（进程/socket/文件监听/定时器）；Forge 本来就没有任何调度原语。做法直接对齐已有的 `subagent` dispatch 模型——外部反复调用 `pi -p "..."` 起独立一次性进程，不是单个 session 里的常驻循环。调度本身（00:00–04:00 窗口、轮数上限）完全交给外部 OS 调度器（launchd 为主，crontab 作为备选说明），pi/extension 层不参与调度决策。
 
@@ -616,7 +678,9 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 明确**不**在这次一并调整 `hideThinkingBlock`（隐藏 thinking block 显示）——虽然文档上确认这个开关只影响终端显示、不影响 `defaultThinkingLevel` 也就是推理深度，但保留默认可见更符合"需要看到它在想什么"的日常使用习惯，先不动，之后如果确实觉得吵可以单独再开。
 
-### 10.5 把夜间审计的循环机制拆成通用引擎 `.pi/scripts/loop.sh`（§14 改名前原为 `pi-loop.sh`）
+### 10.5 把夜间审计的循环机制拆成通用引擎 `.pi/scripts/loop.sh`
+
+> **后续变化（§14）**：这里叫 `pi-loop.sh`，改名前原为这个名字，见 §14。
 
 10.3 落地之后你提了一个更通用的需求：外部反复调用 `pi -p "..."` 这套"断点 + while 循环"的机制，不应该只服务于"审计"这一个场景——目标应该是可替换的，只要换一个 prompt，就能让 pi 朝任何一个长期目标不断被重新激活去尝试，循环骨架本身复用。原来 §10.3 写的 `run.sh` 把审计逻辑（建分支、脏树检查）和循环机制（时间窗口、轮数上限、STOP、通知）糅在一个文件里，不满足这个要求。
 
@@ -663,7 +727,9 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 同时是纯 prompt template，没有写 extension——跟 `/init`/`/btw`/`/audit` 一样的判断：这是一套按顺序读文件、跑命令、问确认的流程，不需要状态管理或工具级拦截，prompt template 够用。
 
-## 13. `.github/workflows/lint.yml` —— 把手动验证里能自动化的部分自动化（§18：`package.json`/`tsconfig.json`/`bun.lock` 后来挪进了 `.pi/`，见 §18）
+## 13. `.github/workflows/lint.yml` —— 把手动验证里能自动化的部分自动化
+
+> **后续变化（§18）**：`package.json`/`tsconfig.json`/`bun.lock` 后来挪进了 `.pi/`，见 §18。
 
 §9.13/§10.5 反复出现同一个模式："这个仓库没有自动化测试框架，验证靠手动跑一遍（`bun -e`、假 `pi` shim、真实跑一次 session）"。这本身没问题——extension/prompt/脚本这些东西确实没有官方测试框架能单元测——但"手动"和"每次改动都真的记得跑"是两件事，后者会随时间衰减。这次加的 CI 只自动化其中机械、无需判断力的那部分，不是要取代 §9.13/§10.5 那套真人验证方法：
 
@@ -701,7 +767,9 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 **决定**：维持现状——prompt 留 prompt，`worktree.sh`/`loop.sh` 留外部脚本。以后如果冒出具体的能力缺口（运行时事件钩子、给 model 暴露可直接调用的工具等），按需为那一个缺口单独评估要不要加 extension，不做批量转换。
 
-## 16. `APPEND_SYSTEM.md` 根本没生效——查证后砍掉，内容并进 `AGENTS.md`（§20：这批内容后来又从 AGENTS.md 搬进了 `.pi/FORGE.md`，AGENTS.md 交还给项目，见 §20）
+## 16. `APPEND_SYSTEM.md` 根本没生效——查证后砍掉，内容并进 `AGENTS.md`
+
+> **后续变化（§20）**：这批内容后来又从 AGENTS.md 搬进了 `.pi/FORGE.md`，AGENTS.md 交还给项目，见 §20。
 
 有人问"要不要砍掉 `APPEND_SYSTEM.md`，反正 AI 也不会主动去读它"，这个直觉部分对、但说的不是真正的机制问题——去查了 pi 自己的文档（`docs/usage.md`/`docs/security.md`）才发现一个更根本的 bug：
 
@@ -710,7 +778,9 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 
 **决定**：不修路径，直接把 `APPEND_SYSTEM.md` 的三条硬约束（不编造结果、如实报告失败、不确定时明说）和容器化前提的免责声明，原文并进 `AGENTS.md` 开头新增的"Non-negotiable"小节，删掉 `APPEND_SYSTEM.md` 本体。理由：既然要重新选路径，AGENTS.md 本来就已经是"pi 保证会加载、不看 project trust"的机制，比修好路径后的 system prompt 文件更可靠，没有理由为了"system prompt 位置更靠底层、模型更难被后续指令覆盖"这一点理论优势，去继续维护一个实际上更脆弱、还得额外记住"这玩意必须放在 `.pi/` 里面"的独立文件。同步更新了所有指向它的地方：`README.md`、`.pi/extensions/protected-paths.ts` 头部注释、`.pi/prompts/smoke-test.md`。§3.1/§4 的原始草案记录保留，作为"当初为什么选 APPEND_SYSTEM.md"的历史决策，不回改。
 
-## 17. 项目瘦身：砍掉 `.pi/audit/`、删掉 "loop until X"、引入 Forger 身份（§20：Identity 这部分内容后来也搬进了 `.pi/FORGE.md`，见 §20）
+## 17. 项目瘦身：砍掉 `.pi/audit/`、删掉 "loop until X"、引入 Forger 身份
+
+> **后续变化（§20）**：Identity 这部分内容后来也搬进了 `.pi/FORGE.md`，见 §20。
 
 `APPEND_SYSTEM.md` 那次清理之后，提出了一个更大的问题——整体做减法。查证了两个具体疑点，另外单独定了一个风格决定。
 
@@ -729,7 +799,9 @@ context 默认色（低于 70% 阈值时）从"dim"改成了"success"（绿色�
 - `.github/workflows/lint.yml` 的 `typecheck` job 加 `defaults.run.working-directory: .pi`，`bun install --frozen-lockfile`/`bun run typecheck` 都在 `.pi/` 里跑；本地对应命令变成 `cd .pi && bun run typecheck`。`json` job 不用改——它本来就分别扫 `.pi/**/*.json` 和仓库根目录，三个文件挪进 `.pi/` 之后自动落进前一半的扫描范围。
 - 实测方式跟 §9.13/§10.5/§14 一致：删掉根目录残留的 `node_modules/`，在 `.pi/` 里跑一次真正干净的 `bun install --frozen-lockfile && bun run typecheck`，确认能从零装好、typecheck 照常通过，不是"看起来对"。
 
-## 19. `README.md`/`docs/design.md` 也挪进 `.pi/`，仓库根目录只留 `AGENTS.md`（§20：连 `AGENTS.md` 后来也不留了，见 §20）
+## 19. `README.md`/`docs/design.md` 也挪进 `.pi/`，仓库根目录只留 `AGENTS.md`
+
+> **后续变化（§20）**：连 `AGENTS.md` 后来也不留了，见 §20。
 
 §18 挪完 `package.json`/`tsconfig.json`/`bun.lock` 之后，同一个逻辑继续往下推：`README.md`（本来在根目录，GitHub 会渲染成仓库主页）和 `docs/design.md`（本文档）一样是 Forge 自己的东西，不是被开发项目的内容，理应跟 `.pi/skills`、`.pi/extensions` 放在同一个命名空间下，不占用留给被开发项目的根目录。
 
