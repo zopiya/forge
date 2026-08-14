@@ -2,7 +2,7 @@
  * Handoff extension - transfer context to a new focused session
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  * Unmodified from upstream.
  *
  * Instead of compacting (which is lossy), handoff extracts what matters

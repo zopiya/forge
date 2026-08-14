@@ -5,7 +5,7 @@
 # simple flat key: value frontmatter block, a handful of grep checks is
 # enough to catch the mistakes that actually happen (missing frontmatter,
 # missing required key, or the {{arg}} placeholder bug from
-# docs/design.md §10 regressing).
+# .pi/design.md §10 regressing).
 
 set -uo pipefail
 
@@ -58,14 +58,14 @@ if compgen -G ".pi/skills/*/SKILL.md" >/dev/null; then
 	done
 fi
 
-# Regression guard for docs/design.md §10: {{arg}}-style placeholders are
+# Regression guard for .pi/design.md §10: {{arg}}-style placeholders are
 # never substituted by pi's real $1/${1:-default}/$ARGUMENTS engine — they
 # silently reach the model as literal text. Fail loudly instead of quietly
 # reintroducing that bug in a new or edited prompt template.
 if compgen -G ".pi/prompts/*.md" >/dev/null; then
 	hits="$(grep -ln '{{[a-zA-Z_]*}}' .pi/prompts/*.md || true)"
 	if [ -n "$hits" ]; then
-		echo "FAIL: non-functional {{arg}} placeholder(s) found (pi does not substitute these, use \$1/\${1:-default}/\$ARGUMENTS instead — see docs/design.md §10):"
+		echo "FAIL: non-functional {{arg}} placeholder(s) found (pi does not substitute these, use \$1/\${1:-default}/\$ARGUMENTS instead — see .pi/design.md §10):"
 		echo "$hits"
 		fail=1
 	fi

@@ -41,7 +41,7 @@ const DESTRUCTIVE_PATTERNS = [
 	// The three below close real bypasses of the read-only guarantee: SAFE_PATTERNS
 	// below allowlists `find`/`curl`/`sort` unconditionally, but each has a flag that
 	// writes to disk without ever producing the literal ">" the generic redirect
-	// check above looks for (docs/design.md §9.13 robustness audit).
+	// check above looks for (.pi/design.md §9.13 robustness audit).
 	/\bfind\b.*-(delete|exec|execdir|ok|okdir|fprintf)\b/i,
 	/\bcurl\b.*(-o\b|-O\b|--output\b|--output-dir\b|--remote-name\b|--remote-name-all\b|-J\b)/i,
 	/\bsort\b.*-o\b/i,

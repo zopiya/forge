@@ -5,9 +5,9 @@
  * Useful for preventing accidental modifications to sensitive files.
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  *
- * Deviations from upstream (see docs/design.md §9.12):
+ * Deviations from upstream (see .pi/design.md §9.12):
  * - Reads `event.input.file_path` as a fallback when `path` is absent. The
  *   built-in write/edit tools accept both field names (dist/core/tools/write.js:
  *   `args?.file_path ?? args?.path`) — upstream only read `path`, which throws
@@ -23,10 +23,10 @@
  *   Windows-style paths too.
  *
  * Deliberately no confirmation prompt — this is a silent hard block, not the
- * "confirm before destructive action" guardrail APPEND_SYSTEM.md/§3.4
- * already decided against. The container boundary doesn't undo a secret
- * that already made it into a commit/push; that's the specific gap this
- * closes.
+ * "confirm before destructive action" guardrail .pi/FORGE.md's "Non-negotiable"
+ * section/§3.4 already decided against. The container boundary doesn't undo
+ * a secret that already made it into a commit/push; that's the specific gap
+ * this closes.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

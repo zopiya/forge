@@ -34,4 +34,4 @@ Not every feature needs all seven — write the ones that carry real information
 
 ## Git
 
-These files are committed, on purpose — see `docs/design.md` §3.6. When a feature branch merges, its `.pi/work/<slug>/` becomes part of the historical record for that change.
+These files are committed, on purpose — see `.pi/design.md` §3.6. When a feature branch merges, its `.pi/work/<slug>/` becomes part of the historical record for that change.

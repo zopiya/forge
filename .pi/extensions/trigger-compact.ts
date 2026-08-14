@@ -2,9 +2,9 @@
  * Trigger Compact Extension
  *
  * Vendored from earendil-works/pi packages/coding-agent/examples/extensions
- * (same vendoring pattern as .pi/extensions/subagent/, see docs/design.md).
+ * (same vendoring pattern as .pi/extensions/subagent/, see .pi/design.md).
  * Unmodified from upstream. Useful here because chain/parallel subagent
- * dispatch burns context fast (see docs/design.md §7.1's cost model).
+ * dispatch burns context fast (see .pi/design.md §7.1's cost model).
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";

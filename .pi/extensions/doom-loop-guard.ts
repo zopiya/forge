@@ -8,7 +8,7 @@
  *
  * Written for Forge, not vendored — inspired by the general idea behind
  * third-party "doom loop" detector packages seen on pi.dev/packages (see
- * docs/design.md §9.12), but no external source was read or copied; this is
+ * .pi/design.md §9.12), but no external source was read or copied; this is
  * a from-scratch minimal implementation, deliberately matching the same
  * `tool_call`-blocking shape already used by
  * `.pi/extensions/plan-mode/index.ts` and `.pi/extensions/protected-paths.ts`
@@ -22,7 +22,7 @@
  * catching real loops over accommodating a case that doesn't exist in this
  * setup today; revisit if that changes.
  *
- * Hardened in the same pass as docs/design.md §9.13's robustness audit:
+ * Hardened in the same pass as .pi/design.md §9.13's robustness audit:
  * JSON.stringify on tool input can throw (circular structures etc.) — a
  * broken guard shouldn't be the reason a real tool call fails, so an
  * unserializable input is now treated as unclassifiable (streak reset, call

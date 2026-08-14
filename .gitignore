@@ -11,7 +11,3 @@ __pycache__/
 
 # pi session exports (/export from the TUI) — personal, large, not repo content
 *.jsonl
-
-# audit loop kill-switch — never commit this, it would permanently disable
-# the loop for anyone who clones the repo (see .pi/audit/README.md)
-.pi/audit/STOP
