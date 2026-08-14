@@ -83,7 +83,7 @@ git log --oneline -5
 
 - Use `git reflog` to find lost commits or branch tips.
 - Use `git stash push -m "<message>"` only when the user wants to park local changes.
-- Use `git worktree` for parallel branch inspection when switching would disturb local changes.
+- Use `git worktree` for parallel branch inspection when switching would disturb local changes — see `.pi/skills/worktree/SKILL.md` for setup/cleanup and the gotchas around removing one safely.
 - Use `git cherry-pick` for specific known commits rather than broad merging when only one fix is needed.
 
 ## Publishing Checks
